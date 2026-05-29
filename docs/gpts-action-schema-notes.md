@@ -1,132 +1,78 @@
 # GPTs Action Schema Notes
 
-## Preferred V1.7 Endpoints
+## Preferred Endpoints
 
-GPTs Actions should use the JSON-friendly wrapper endpoints:
+GPTs Actions should use:
 
 - `POST /api/gpts/login`
 - `POST /api/gpts/calculate`
 - `POST /api/gpts/prepare-pdf`
 
-The wrapper endpoints reuse the existing backend APIs but normalize responses for GPTs. They are the only endpoints that should appear as primary actions in the GPTs OpenAPI schema.
+Legacy endpoints remain backend/source APIs and production smoke-test tools only.
 
-## Legacy Backend APIs
+## sessionToken Handoff
 
-These endpoints remain available as backend/source APIs and for production smoke tests:
+GPTs Builder may not reliably pass Authorization headers between actions. For this reason:
 
-- `POST /api/auth/login`
-- `POST /api/land-tax/calculate`
-- `POST /api/land-tax/pdf`
-- `GET /api/land-tax/pdf/download`
-
-GPTs Instructions should not tell the GPT to call the legacy endpoints directly during the normal production flow.
-
-## Wrapper Response Shapes
-
-### `POST /api/gpts/login`
-
-Success:
-
-```json
-{
-  "success": true,
-  "data": {
-    "sessionToken": "SESSION_TOKEN_PLACEHOLDER",
-    "store": {
-      "storeCode": "CH006",
-      "storeName": "STORE_NAME_PLACEHOLDER",
-      "brokerageName": "BROKERAGE_NAME_PLACEHOLDER",
-      "brokerName": "BROKER_NAME_PLACEHOLDER",
-      "brokerLicenseNo": "BROKER_LICENSE_PLACEHOLDER",
-      "watermarkText": "WATERMARK_TEXT_PLACEHOLDER",
-      "expiresAt": "2099-08-26"
-    }
-  },
-  "nextAction": "calculate"
-}
-```
-
-### `POST /api/gpts/calculate`
-
-Success:
-
-```json
-{
-  "success": true,
-  "data": {
-    "success": true,
-    "formulaVersion": "land-tax-v1.0.0",
-    "previousIndexValue": 9.86,
-    "currentIndexValue": 111.23,
-    "taxIndexMultiplier": 11.280933062880326,
-    "currentTotalValue": 500000,
-    "adjustedPreviousTotalValue": 1128093.3062880326,
-    "taxableIncrement": 0,
-    "generalTaxResult": {
-      "estimatedTax": 0,
-      "rateNote": "RATE_NOTE_PLACEHOLDER"
-    },
-    "selfUseTaxResult": {
-      "estimatedTax": 0,
-      "rateNote": "RATE_NOTE_PLACEHOLDER"
-    }
-  },
-  "nextAction": "prepare-pdf"
-}
-```
-
-### `POST /api/gpts/prepare-pdf`
-
-Success:
-
-```json
-{
-  "success": true,
-  "data": {
-    "downloadUrl": "PDF_DOWNLOAD_URL_PLACEHOLDER",
-    "expiresInMinutes": 15,
-    "storeProfileSummary": {
-      "storeCode": "CH006",
-      "storeName": "STORE_NAME_PLACEHOLDER"
-    }
-  },
-  "nextAction": "download"
-}
-```
-
-The wrapper does not return binary PDF content. GPTs should present the short-lived download URL to the user.
-
-## Error Shape
-
-Wrapper errors use:
-
-```json
-{
-  "success": false,
-  "errorCode": "TAX_INDEX_NOT_FOUND",
-  "stage": "calculate",
-  "sourceStatus": 404
-}
-```
-
-Login failures may also include `reason`, for example `invalid_auth_code`.
+- `gptsCalculate` accepts either `Authorization: Bearer <sessionToken>` or body `sessionToken`.
+- `gptsPreparePdf` accepts either `Authorization: Bearer <sessionToken>` or body `sessionToken`.
+- Authorization header takes priority.
+- Body `sessionToken` is only a fallback.
+- Responses must not echo the sessionToken.
+- Errors must not include the sessionToken.
+- Docs and examples must use only `SESSION_TOKEN_PLACEHOLDER`.
 
 ## OpenAPI Requirements
 
 The production schema must:
 
-- Use `https://land-tax-calculator-xi.vercel.app` as the server URL.
-- Include operation IDs:
-  - `gptsLogin`
-  - `gptsCalculate`
-  - `gptsPreparePdf`
+- Use server URL `https://land-tax-calculator-xi.vercel.app`.
+- Include operation IDs `gptsLogin`, `gptsCalculate`, and `gptsPreparePdf`.
+- Keep `gptsCalculate` and `gptsPreparePdf` descriptions under 300 characters.
+- Include optional `sessionToken` in `CalculateRequest`.
+- Include optional `sessionToken` in `PdfPrepareRequest`.
 - Avoid binary PDF download actions as primary GPTs Actions.
 - Use placeholders only.
 - Avoid real store credentials, session tokens, admin tokens, and full download URLs.
 
-## V1.6 Tax Index Baseline
+## Wrapper Response Summary
 
-Documented production baseline:
+`gptsLogin` returns:
+
+- `success`
+- `data.sessionToken`
+- `data.store`
+- `nextAction = calculate`
+
+`gptsCalculate` returns:
+
+- `success`
+- `data`
+- `nextAction = prepare-pdf`
+
+`gptsPreparePdf` returns:
+
+- `success`
+- `data.downloadUrl`
+- `data.expiresInMinutes`
+- `data.storeProfileSummary`
+- `nextAction = download`
+
+## Transcript Parsing Summary
+
+Full rules live in `docs/transcript-parsing-rules.md`. GPTs Instructions must still include the core rules directly.
+
+Schema and Action notes only need these reminders:
+
+- User prompts should say `公告土地現值年月`, not `本次移轉年月`.
+- GPTs must not use registration date, sale date, filing date, or transfer date as 公告土地現值年月.
+- `****` in transcripts is often a fixed format marker, not proof that data is masked.
+- `公告土地現值` should be parsed from the line containing `公告土地現值`.
+- `前次移轉現值或原規定地價` usually reads from the following line.
+- `當期申報地價` must not be used as 公告土地現值 or 前次移轉現值.
+- GPTs should not ask whether to continue a previous case; it should manage state internally.
+
+## V1.6 Tax Index Baseline
 
 - `tax_price_indexes count = 808`
 - `first_year_month = 04801`
@@ -135,5 +81,3 @@ Documented production baseline:
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
 - `taxIndexMultiplier = 11.280933062880326`
-
-If `TAX_INDEX_NOT_FOUND` appears for a year-month outside this range, the GPT should explain that the production index data does not contain that period.

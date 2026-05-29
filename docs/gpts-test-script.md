@@ -1,6 +1,6 @@
-# V1.7 GPTs Action Test Script
+# V1.7.1 GPTs Action Test Script
 
-This script verifies the production GPTs wrapper flow. Do not paste real store credentials, full session tokens, full download URLs, PDF files, or test JSON into Git.
+This script verifies GPTs wrapper behavior, sessionToken handoff, transcript parsing prompts, and safety rules. Do not paste real store credentials, full session tokens, full download URLs, PDF files, or test JSON into Git.
 
 ## Production Wrapper Flow
 
@@ -43,8 +43,7 @@ Expected:
 - `data.store.storeCode = CH006`
 - `data.store.storeName` exists
 - `nextAction = calculate`
-
-Do not paste the full session token into test notes.
+- GPTs does not display the full `data.sessionToken`
 
 ## 2. Wrapper Login Failure
 
@@ -63,10 +62,9 @@ Expected:
 - `errorCode = AUTH_FAILED`
 - `reason = invalid_auth_code`
 - `stage = login`
+- GPTs does not guess or reveal the correct credential
 
-Do not guess or reveal the correct credential.
-
-## 3. Wrapper Calculate Success
+## 3. Wrapper Calculate Success With Authorization Header
 
 Action:
 
@@ -96,14 +94,35 @@ Expected:
 - `data.taxIndexMultiplier = 11.280933062880326`
 - `nextAction = prepare-pdf`
 
-## 4. Wrapper TAX_INDEX_NOT_FOUND
+## 4. Wrapper Calculate Success With Body sessionToken
 
-Action:
+If GPTs Actions cannot send Authorization headers, call `gptsCalculate` with the same payload plus:
 
-```text
-gptsCalculate
-Authorization: Bearer <sessionToken>
+```json
+{
+  "sessionToken": "SESSION_TOKEN_PLACEHOLDER"
+}
 ```
+
+Expected:
+
+- same success criteria as header-based calculate
+- response does not echo the sessionToken
+- logs and errors do not expose the sessionToken
+
+## 5. Wrapper Calculate Missing Token
+
+Call `gptsCalculate` without Authorization header and without body `sessionToken`.
+
+Expected:
+
+- HTTP 401
+- `success = false`
+- `errorCode = AUTH_FAILED`
+- `stage = calculate`
+- GPTs must not calculate by itself
+
+## 6. Wrapper TAX_INDEX_NOT_FOUND
 
 Use a nonexistent year-month such as:
 
@@ -117,10 +136,9 @@ Expected:
 - `errorCode = TAX_INDEX_NOT_FOUND`
 - `stage = calculate`
 - `sourceStatus = 404`
+- GPTs must not invent missing index values or calculate by itself
 
-GPTs should ask the user to verify the year-month values or ask operations to check tax index data. GPTs must not invent missing index values.
-
-## 5. Wrapper Prepare PDF
+## 7. Wrapper Prepare PDF With Authorization Header
 
 Action:
 
@@ -131,9 +149,9 @@ Authorization: Bearer <sessionToken>
 
 Use:
 
-- `confirmedLandData` with display fields such as city district, section, land number, area, ownership range, and year-month values.
-- `calculationResult` from `gptsCalculate.data`.
-- optional `businessCardData`.
+- `confirmedLandData`
+- `calculationResult` from `gptsCalculate.data`
+- optional `businessCardData`
 
 Expected:
 
@@ -142,10 +160,74 @@ Expected:
 - `data.expiresInMinutes = 15`
 - `data.storeProfileSummary` exists
 - `nextAction = download`
+- GPTs does not paste the full `data.downloadUrl` into notes
 
-Do not paste the full `data.downloadUrl` into test notes.
+## 8. Wrapper Prepare PDF With Body sessionToken
 
-## 6. PDF Handling
+If GPTs Actions cannot send Authorization headers, call `gptsPreparePdf` with the same payload plus:
+
+```json
+{
+  "sessionToken": "SESSION_TOKEN_PLACEHOLDER"
+}
+```
+
+Expected:
+
+- same success criteria as header-based prepare PDF
+- response does not echo the sessionToken
+- logs and errors do not expose the sessionToken
+
+## 9. Wrapper Prepare PDF Missing Token
+
+Call `gptsPreparePdf` without Authorization header and without body `sessionToken`.
+
+Expected:
+
+- HTTP 401
+- `success = false`
+- `errorCode = AUTH_FAILED`
+- `stage = prepare-pdf`
+
+## 10. Transcript Prompt Behavior
+
+After login success and before complete land data exists, GPTs prompt must:
+
+- not show `本次移轉年月`
+- show `公告土地現值年月`
+- show `公告土地現值（元／平方公尺）`
+- not ask `是否延續先前案件`
+- not require the user to understand session, case continuation, or workflow state
+
+Expected user-facing prompt style:
+
+```text
+登入成功。接下來請提供土地資料，或直接上傳土地登記謄本，我可以協助判讀。
+
+需要的資料如下：
+- 土地面積（平方公尺）
+- 權利範圍，例如 1/1、1/2
+- 公告土地現值年月
+- 公告土地現值（元／平方公尺）
+- 前次移轉年月
+- 前次移轉現值或原規定地價（元／平方公尺）
+
+注意：不需要提供本次移轉日期、買賣日期或登記日期。
+```
+
+## 11. Transcript Parsing Behavior
+
+Verify:
+
+1. `****` does not automatically mean masked or unreadable data.
+2. `公告土地現值` reads the ROC year-month and amount from the same line.
+3. `前次移轉現值或原規定地價` reads the following line.
+4. `當期申報地價` is not used as 公告土地現值.
+5. `當期申報地價` is not used as 前次移轉現值.
+6. 登記日期、買賣日期、送件日期不得作為公告土地現值年月。
+7. If a transcript is uploaded, GPTs parses it first and does not repeatedly ask for fields already available from the transcript.
+
+## 12. PDF Handling
 
 The wrapper returns JSON only. GPTs should not parse binary PDF content.
 
@@ -156,16 +238,7 @@ If the user needs the PDF:
 - Do not save the PDF.
 - Do not commit PDF or JSON test payload files.
 
-## 7. Visual Checks
-
-When a human opens the PDF, verify:
-
-- No `???`.
-- Land data Chinese text displays correctly.
-- Store disclosure appears at the bottom.
-- Watermark uses the logged-in store profile.
-
-## 8. Cleanup
+## 13. Cleanup
 
 After testing:
 

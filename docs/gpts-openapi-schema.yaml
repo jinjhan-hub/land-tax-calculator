@@ -50,7 +50,7 @@ paths:
       tags: [GPTs]
       operationId: gptsCalculate
       summary: Calculate land value increment tax for GPTs
-      description: Calculate land value increment tax through the GPTs wrapper. Use only after login succeeds.
+      description: Calculate land tax through the GPTs wrapper. Use after login. If Authorization header is unavailable, pass sessionToken in the request body.
       security:
         - bearerAuth: []
       requestBody:
@@ -72,6 +72,7 @@ paths:
                   improvementCost: 0
                   landReadjustmentCost: 0
                   engineeringBenefitFee: 0
+                  sessionToken: SESSION_TOKEN_PLACEHOLDER
       responses:
         "200":
           description: Calculation succeeded.
@@ -123,7 +124,7 @@ paths:
       tags: [GPTs]
       operationId: gptsPreparePdf
       summary: Prepare a PDF for GPTs and return JSON metadata
-      description: Prepare a short-lived PDF download link after a successful calculation. Return JSON only. Do not parse PDF binary content or store tokens.
+      description: Prepare a short-lived PDF download link after calculation. If Authorization header is unavailable, pass sessionToken in the request body.
       security:
         - bearerAuth: []
       requestBody:
@@ -164,6 +165,7 @@ paths:
                     agentName: AGENT_NAME_PLACEHOLDER
                     phone: PHONE_PLACEHOLDER
                     storeName: CONTACT_STORE_NAME_PLACEHOLDER
+                  sessionToken: SESSION_TOKEN_PLACEHOLDER
       responses:
         "200":
           description: PDF was prepared successfully.
@@ -265,6 +267,10 @@ components:
         - previousDeclaredValuePerSqm
         - currentDeclaredValuePerSqm
       properties:
+        sessionToken:
+          type: string
+          description: Short-lived sessionToken returned by gptsLogin. Use only when Authorization header is unavailable.
+          example: SESSION_TOKEN_PLACEHOLDER
         landArea:
           type: number
           minimum: 0
@@ -363,6 +369,10 @@ components:
       additionalProperties: false
       required: [confirmedLandData, calculationResult]
       properties:
+        sessionToken:
+          type: string
+          description: Short-lived sessionToken returned by gptsLogin. Use only when Authorization header is unavailable.
+          example: SESSION_TOKEN_PLACEHOLDER
         confirmedLandData:
           type: object
           additionalProperties: true
