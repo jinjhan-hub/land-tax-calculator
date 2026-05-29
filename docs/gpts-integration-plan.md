@@ -1,171 +1,184 @@
-# GPTs 串接計畫
+# GPTs Integration Plan
 
-## 整體流程
+## Production Flow
 
-GPTs 的正式流程固定為：
+The production GPTs flow must use the JSON-friendly wrapper endpoints:
 
-1. `login`
-2. `calculate`
-3. `pdf`
-4. `download`
+1. `POST /api/gpts/login`
+2. `POST /api/gpts/calculate`
+3. `POST /api/gpts/prepare-pdf`
+4. Present the short-lived `downloadUrl` to the user.
 
-GPTs 應先取得合法 `sessionToken`，再呼叫所有需要授權的 API。PDF 產出時，店家揭露資訊與浮水印由後端根據 session 查詢，不由 GPTs 或使用者提供。
+The GPTs should not call these legacy endpoints directly in the normal Action flow:
 
-## Step 1：登入
+- `POST /api/auth/login`
+- `POST /api/land-tax/calculate`
+- `POST /api/land-tax/pdf`
 
-Endpoint：
+Those legacy endpoints remain the backend source APIs and may be used for production smoke tests or compatibility checks.
+
+## Responsibilities
+
+GPTs is the primary user interaction layer. The Vercel API is the source of truth for authentication, calculation, store profile lookup, and PDF preparation.
+
+GPTs may:
+
+- Guide users through login.
+- Collect and normalize land data.
+- Call wrapper APIs.
+- Explain API results in plain Traditional Chinese.
+- Provide a short-lived PDF download link when requested.
+
+GPTs must not:
+
+- Recalculate or replace the land tax formula.
+- Trust user-entered store disclosure data.
+- Ask for or send `userCode`.
+- Save credentials, session tokens, admin tokens, or full PDF download URLs.
+- Save test PDF or JSON files.
+- Call `/api/cpi/upload-excel`.
+
+## Step 1: Login
+
+Use:
 
 ```text
-POST /api/auth/login
+POST /api/gpts/login
 ```
 
-Request body：
+Request uses `storeCode` and the store credential field defined in the Action schema. The backend still fixes `userCode = STORE`.
+
+Success response shape:
 
 ```json
 {
-  "storeCode": "CH006",
-  "authCode": "<redacted>"
+  "success": true,
+  "data": {
+    "sessionToken": "SESSION_TOKEN_PLACEHOLDER",
+    "store": {
+      "storeCode": "CH006",
+      "storeName": "STORE_NAME_PLACEHOLDER",
+      "brokerageName": "BROKERAGE_NAME_PLACEHOLDER",
+      "brokerName": "BROKER_NAME_PLACEHOLDER",
+      "brokerLicenseNo": "BROKER_LICENSE_PLACEHOLDER",
+      "watermarkText": "WATERMARK_TEXT_PLACEHOLDER",
+      "expiresAt": "2099-08-26"
+    }
+  },
+  "nextAction": "calculate"
 }
 ```
 
-成功後 GPTs 可保存於本輪對話上下文：
+The GPTs may summarize the store name to the user, but must not reveal the full session token.
 
-- `sessionToken`
-- `store.storeCode`
-- `store.storeName`
-- `store.brokerageName`
-- `store.brokerName`
-- `store.brokerLicenseNo`
-- `store.watermarkText`
-- `store.expiresAt`
+## Step 2: Calculate
 
-使用原則：
-
-- `authCode` 只用於登入，不得再回顯。
-- `sessionToken` 短效，預設 30 分鐘。
-- `sessionToken` 不應出現在使用者可見訊息、log 或錯誤回報中。
-- 若收到 `AUTH_FAILED` 或 login `reason`，GPTs 應要求使用者重新登入。
-
-## Step 2：試算
-
-Endpoint：
+Use:
 
 ```text
-POST /api/land-tax/calculate
+POST /api/gpts/calculate
 Authorization: Bearer <sessionToken>
 ```
 
-Request body 由 GPTs 整理土地資料後送出。必要欄位依目前 `LandTaxCalculationInput`：
+Required input:
 
-```json
-{
-  "landArea": 100,
-  "ownershipNumerator": 1,
-  "ownershipDenominator": 1,
-  "previousTransferYearMonth": "11301",
-  "currentTransferYearMonth": "11401",
-  "previousDeclaredValuePerSqm": 1000,
-  "currentDeclaredValuePerSqm": 1500,
-  "improvementCost": 0,
-  "landReadjustmentCost": 0,
-  "engineeringBenefitFee": 0
-}
-```
+- `landArea`
+- `ownershipNumerator`
+- `ownershipDenominator`
+- `previousTransferYearMonth`
+- `currentTransferYearMonth`
+- `previousDeclaredValuePerSqm`
+- `currentDeclaredValuePerSqm`
 
-注意：
+Optional cost fields:
 
-- `previousTransferYearMonth` 與 `currentTransferYearMonth` 使用民國年月 `YYYMM`。
-- 不要傳 `isSelfUseResidential`，目前 API 會視為不合法欄位。
-- GPTs 不得自行覆寫稅額公式，應以 API 回傳結果為準。
+- `improvementCost`
+- `landReadjustmentCost`
+- `engineeringBenefitFee`
 
-## Step 3：產生 PDF
+Do not send `isSelfUseResidential`.
 
-Endpoint：
+## Step 3: Prepare PDF
+
+Use:
 
 ```text
-POST /api/land-tax/pdf
+POST /api/gpts/prepare-pdf
 Authorization: Bearer <sessionToken>
 ```
 
-PDF body 可包含：
+Request body includes:
 
 - `confirmedLandData`
 - `calculationResult`
-- `businessCardData`
+- optional `businessCardData`
 
-原則：
+The store disclosure text and watermark are resolved by the backend from the session store profile. GPTs must not provide official store disclosure fields in the request.
 
-- `confirmedLandData` 放入使用者確認後要顯示於 PDF 的土地資訊。
-- `calculationResult` 使用 `/api/land-tax/calculate` 回傳結果。
-- `businessCardData` 可放聯絡資訊，但不可當作正式店家揭露資料來源。
-- 正式店家揭露資訊與浮水印由 PDF API 後端查詢 store profile。
+Success response shape:
 
-禁止欄位：
-
-- `image`
-- `base64`
-- `businessCardImageUrl`
-- `openaiFileIdRefs`
-- `portraitAvailable`
-- `portraitCropArea`
-
-## Step 4：下載 PDF
-
-PDF API 成功後會回傳短效 `downloadUrl` 與 `expiresInMinutes`。GPTs 可以把下載連結交給使用者，但不得把完整 URL 寫入長期 log 或公開除錯內容。
-
-下載 endpoint：
-
-```text
-GET /api/land-tax/pdf/download?token=<download-token>
+```json
+{
+  "success": true,
+  "data": {
+    "downloadUrl": "PDF_DOWNLOAD_URL_PLACEHOLDER",
+    "expiresInMinutes": 15,
+    "storeProfileSummary": {
+      "storeCode": "CH006",
+      "storeName": "STORE_NAME_PLACEHOLDER"
+    }
+  },
+  "nextAction": "download"
+}
 ```
 
-下載 token 與 session token 不同。下載 token 預設 15 分鐘有效，逾期應重新呼叫 PDF API。
+## Download URL Handling
 
-## Store Profile 原則
+The `downloadUrl` is short-lived and user-facing only. It must not be stored in files, docs, logs, or long-term memory.
 
-GPTs 可以把 login response 中的 store profile 顯示給使用者確認，但 PDF 正式輸出必須以後端查詢結果為準。
+GPTs should not parse the binary PDF response. If a user needs the PDF, provide the short-lived link and explain that it expires.
 
-GPTs 不得接受使用者手動輸入以下欄位作為 PDF 揭露資訊正式來源：
+## V1.6 Production Tax Index Baseline
 
-- 使用分店
-- 經紀業名稱
-- 經紀人
-- 經紀人字號
-- PDF 浮水印
+The accepted production tax index baseline is:
 
-若使用者指出店家資訊錯誤，GPTs 應要求後台營運人員更新 `public.store_users`，而不是在本次 payload 中覆寫。
+- `tax_price_indexes count = 808`
+- `first_year_month = 04801`
+- `latest_year_month = 11504`
+- The sample Excel range ends at `11504`; therefore `11505` should not exist.
+- Smoke pair: `previousTransferYearMonth = 04801`, `currentTransferYearMonth = 11504`
+- `previousIndexValue = 9.86`
+- `currentIndexValue = 111.23`
+- `taxIndexMultiplier = 11.280933062880326`
 
-## 錯誤處理規則
+If GPTs receives `TAX_INDEX_NOT_FOUND`, it should ask the user to verify the year-month values or ask an operator to check the production tax index data. GPTs must not invent missing index values.
 
-建議 GPTs 對常見錯誤採取以下行為：
+## Error Handling
 
-- `AUTH_FAILED`：要求重新登入。
-- `missing_credentials`：提示輸入分店代碼與分店驗證碼。
-- `invalid_auth_code`：提示驗證碼錯誤。
-- `store_user_inactive`：提示帳號已停用，請聯絡管理者。
-- `store_user_expired`：提示帳號已到期，請聯絡管理者。
-- `TAX_INDEX_NOT_FOUND`：提示指定年月的物價指數不存在，請確認年月或通知管理者補資料。
-- `LAND_FIELD_MISSING`：提示缺少或格式錯誤的土地資料。
-- `PDF_GENERATION_FAILED`：提示 PDF 產生失敗，可稍後重試或回報管理者。
-- `PDF_TOKEN_EXPIRED`：提示下載連結已過期，需要重新產生 PDF。
+Login errors:
 
-## 測試案例
+- `AUTH_FAILED`
+- `missing_credentials`
+- `invalid_auth_code`
+- `store_user_not_found`
+- `store_user_inactive`
+- `store_user_expired`
+- `invalid_auth_hash`
+- `store_auth_error`
 
-基本成功路徑：
+Calculate errors:
 
-1. 正確 `storeCode + authCode` 登入成功。
-2. login response 有 store profile。
-3. calculate 回傳 `success=true` 與試算結果。
-4. pdf 回傳 `success=true`、`downloadUrl`、`expiresInMinutes`。
-5. 下載 PDF 成功。
-6. PDF 中文正常。
-7. PDF 底部店家揭露資訊正確。
-8. PDF 浮水印正確。
+- `AUTH_FAILED`
+- `LAND_FIELD_MISSING`
+- `TAX_INDEX_NOT_FOUND`
+- `CALCULATION_FAILED`
 
-錯誤路徑：
+PDF errors:
 
-- 錯誤 authCode 回傳 401。
-- 過期或停用帳號回傳 401 與 reason。
-- 缺少土地必要欄位回傳 `LAND_FIELD_MISSING`。
-- CPI 年月不存在回傳 `TAX_INDEX_NOT_FOUND`。
-- PDF download token 過期回傳 410。
+- `AUTH_FAILED`
+- `PDF_GENERATION_FAILED`
+
+Download errors:
+
+- `PDF_TOKEN_EXPIRED`
+- `PDF_TOKEN_INVALID`

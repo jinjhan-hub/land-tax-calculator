@@ -63,6 +63,19 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CalculateRequest"
+            examples:
+              v16ProductionBaseline:
+                value:
+                  landArea: 100
+                  ownershipNumerator: 1
+                  ownershipDenominator: 1
+                  previousTransferYearMonth: "04801"
+                  currentTransferYearMonth: "11504"
+                  previousDeclaredValuePerSqm: 1000
+                  currentDeclaredValuePerSqm: 5000
+                  improvementCost: 0
+                  landReadjustmentCost: 0
+                  engineeringBenefitFee: 0
       responses:
         "200":
           description: Calculation succeeded.
@@ -70,6 +83,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsCalculateSuccess"
+              examples:
+                v16ProductionBaseline:
+                  value:
+                    success: true
+                    data:
+                      success: true
+                      formulaVersion: land-tax-v1.0.0
+                      previousIndexValue: 9.86
+                      currentIndexValue: 111.23
+                      taxIndexMultiplier: 11.280933062880326
+                      currentTotalValue: 500000
+                      adjustedPreviousTotalValue: 1128093.3062880326
+                      taxableIncrement: 0
+                      generalTaxResult:
+                        estimatedTax: 0
+                        rateNote: RATE_NOTE_PLACEHOLDER
+                      selfUseTaxResult:
+                        estimatedTax: 0
+                        rateNote: RATE_NOTE_PLACEHOLDER
+                    nextAction: prepare-pdf
         "400":
           description: Invalid land input or calculation failure.
           content:
@@ -107,6 +140,38 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PdfPrepareRequest"
+            examples:
+              v16ProductionBaseline:
+                value:
+                  confirmedLandData:
+                    landCityDistrict: CITY_DISTRICT_PLACEHOLDER
+                    landSection: LAND_SECTION_PLACEHOLDER
+                    landNumber: "123-1"
+                    landArea: 100
+                    ownershipRange: "1/1"
+                    previousTransferYearMonth: "04801"
+                    currentTransferYearMonth: "11504"
+                    previousDeclaredValuePerSqm: 1000
+                    currentDeclaredValuePerSqm: 5000
+                  calculationResult:
+                    success: true
+                    formulaVersion: land-tax-v1.0.0
+                    previousIndexValue: 9.86
+                    currentIndexValue: 111.23
+                    taxIndexMultiplier: 11.280933062880326
+                    currentTotalValue: 500000
+                    adjustedPreviousTotalValue: 1128093.3062880326
+                    taxableIncrement: 0
+                    generalTaxResult:
+                      estimatedTax: 0
+                      rateNote: RATE_NOTE_PLACEHOLDER
+                    selfUseTaxResult:
+                      estimatedTax: 0
+                      rateNote: RATE_NOTE_PLACEHOLDER
+                  businessCardData:
+                    agentName: AGENT_NAME_PLACEHOLDER
+                    phone: PHONE_PLACEHOLDER
+                    storeName: CONTACT_STORE_NAME_PLACEHOLDER
       responses:
         "200":
           description: PDF was prepared successfully.

@@ -1,29 +1,52 @@
-# 正式站 Smoke Test
+# Production Smoke Test
 
-## 前置注意
-
-正式站：
+Production site:
 
 ```text
 https://land-tax-calculator-xi.vercel.app
 ```
 
-PowerShell 測試時：
+This smoke test is for human verification. The production GPTs flow should use `/api/gpts/*` wrapper endpoints.
 
-- 不要把完整 authCode 貼到公開紀錄。
-- 不要把完整 `sessionToken` 貼到公開紀錄。
-- 不要把完整 PDF `downloadUrl` 貼到公開紀錄。
-- 測試 PDF 下載後要刪除。
-- 中文 JSON 建議使用 UTF-8。
+## Safety
 
-## 1. API login 測試
+Do not save or commit:
+
+- Store credentials.
+- Session tokens.
+- Admin upload tokens.
+- Full PDF download URLs.
+- Test PDF files.
+- Test JSON files.
+
+Do not call:
+
+```text
+POST /api/cpi/upload-excel
+```
+
+Do not modify production `tax_price_indexes`.
+
+## UTF-8 PowerShell Setup
 
 ```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $base = "https://land-tax-calculator-xi.vercel.app"
+```
 
+Use:
+
+```powershell
+-ContentType "application/json; charset=utf-8"
+```
+
+## 1. Wrapper Login
+
+```powershell
 $login = Invoke-RestMethod `
   -Method Post `
-  -Uri "$base/api/auth/login" `
+  -Uri "$base/api/gpts/login" `
   -ContentType "application/json; charset=utf-8" `
   -Body (@{
     storeCode = "CH006"
@@ -31,56 +54,33 @@ $login = Invoke-RestMethod `
   } | ConvertTo-Json)
 
 $login.success
-$login.store
+$login.data.store
 ```
 
-預期：
+Expected:
 
 - `success = True`
-- `store.storeCode` 正確
-- `store.storeName` 正確
-- `store.brokerageName` 正確
-- `store.brokerName` 正確
-- `store.brokerLicenseNo` 正確
-- `store.watermarkText` 正確
-- `store.expiresAt` 正確
+- `data.sessionToken` exists
+- `data.store` is correct
+- `nextAction = calculate`
 
-錯誤密碼測試：
+Do not paste the full session token into notes.
 
-```powershell
-$badLogin = Invoke-WebRequest `
-  -Method Post `
-  -Uri "$base/api/auth/login" `
-  -ContentType "application/json; charset=utf-8" `
-  -Body (@{
-    storeCode = "CH006"
-    authCode = "wrong-code"
-  } | ConvertTo-Json) `
-  -SkipHttpErrorCheck
+## 2. Wrapper Calculate
 
-$badLogin.StatusCode
-$badLogin.Content
-```
-
-預期：
-
-- HTTP 401
-- `errorCode = AUTH_FAILED`
-- `reason = invalid_auth_code`
-
-## 2. calculate 測試
+Use the V1.6 production baseline pair:
 
 ```powershell
-$token = $login.sessionToken
+$token = $login.data.sessionToken
 
 $calcPayload = @{
   landArea = 100
   ownershipNumerator = 1
   ownershipDenominator = 1
-  previousTransferYearMonth = "11301"
-  currentTransferYearMonth = "11401"
+  previousTransferYearMonth = "04801"
+  currentTransferYearMonth = "11504"
   previousDeclaredValuePerSqm = 1000
-  currentDeclaredValuePerSqm = 1500
+  currentDeclaredValuePerSqm = 5000
   improvementCost = 0
   landReadjustmentCost = 0
   engineeringBenefitFee = 0
@@ -88,25 +88,56 @@ $calcPayload = @{
 
 $calc = Invoke-RestMethod `
   -Method Post `
-  -Uri "$base/api/land-tax/calculate" `
+  -Uri "$base/api/gpts/calculate" `
   -Headers @{ Authorization = "Bearer $token" } `
   -ContentType "application/json; charset=utf-8" `
   -Body ($calcPayload | ConvertTo-Json -Depth 10)
 
 $calc.success
-$calc.formulaVersion
-$calc.generalTaxResult
-$calc.selfUseTaxResult
+$calc.data.formulaVersion
+$calc.data.previousIndexValue
+$calc.data.currentIndexValue
+$calc.data.taxIndexMultiplier
+$calc.nextAction
 ```
 
-預期：
+Expected:
 
 - `success = True`
-- `formulaVersion` 有值
-- `generalTaxResult.estimatedTax` 有值
-- `selfUseTaxResult.estimatedTax` 有值
+- `data.success = True`
+- `data.formulaVersion = land-tax-v1.0.0`
+- `data.previousIndexValue = 9.86`
+- `data.currentIndexValue = 111.23`
+- `data.taxIndexMultiplier = 11.280933062880326`
+- `nextAction = prepare-pdf`
 
-## 3. PDF API 測試
+## 3. Wrapper TAX_INDEX_NOT_FOUND
+
+```powershell
+$badCalcPayload = $calcPayload.Clone()
+$badCalcPayload.previousTransferYearMonth = "99912"
+
+$badCalc = Invoke-WebRequest `
+  -Method Post `
+  -Uri "$base/api/gpts/calculate" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ($badCalcPayload | ConvertTo-Json -Depth 10) `
+  -SkipHttpErrorCheck
+
+$badCalc.StatusCode
+$badCalc.Content
+```
+
+Expected:
+
+- HTTP 404
+- `success = false`
+- `errorCode = TAX_INDEX_NOT_FOUND`
+- `stage = calculate`
+- `sourceStatus = 404`
+
+## 4. Wrapper Prepare PDF
 
 ```powershell
 $pdfPayload = @{
@@ -116,12 +147,12 @@ $pdfPayload = @{
     landNumber = "123-1"
     landArea = 100
     ownershipRange = "1/1"
-    previousTransferYearMonth = "11301"
-    currentTransferYearMonth = "11401"
+    previousTransferYearMonth = "04801"
+    currentTransferYearMonth = "11504"
     previousDeclaredValuePerSqm = 1000
-    currentDeclaredValuePerSqm = 1500
+    currentDeclaredValuePerSqm = 5000
   }
-  calculationResult = $calc
+  calculationResult = $calc.data
   businessCardData = @{
     agentName = "測試經紀人"
     phone = "0900-000-000"
@@ -131,77 +162,48 @@ $pdfPayload = @{
 
 $pdfResult = Invoke-RestMethod `
   -Method Post `
-  -Uri "$base/api/land-tax/pdf" `
+  -Uri "$base/api/gpts/prepare-pdf" `
   -Headers @{ Authorization = "Bearer $token" } `
   -ContentType "application/json; charset=utf-8" `
   -Body ($pdfPayload | ConvertTo-Json -Depth 20)
 
 $pdfResult.success
-$pdfResult.expiresInMinutes
+$pdfResult.data.expiresInMinutes
+$pdfResult.data.storeProfileSummary
+$pdfResult.nextAction
 ```
 
-預期：
+Expected:
 
 - `success = True`
-- `expiresInMinutes = 15`
-- 有 `downloadUrl`
+- `data.downloadUrl` exists
+- `data.expiresInMinutes = 15`
+- `data.storeProfileSummary` is correct
+- `nextAction = download`
 
-不要在公開回報貼完整 `downloadUrl`。
+Do not paste the full download URL into notes.
 
-## 4. PDF download 測試
+## 5. PDF Visual Check
 
-```powershell
-$pdfPath = Join-Path $PWD "tmp-land-tax-smoke.pdf"
-Invoke-WebRequest -Uri $pdfResult.downloadUrl -OutFile $pdfPath
-Get-Item $pdfPath | Select-Object FullName,Length
-```
+If a human downloads the PDF, delete it immediately after verification.
 
-檢查：
+Check:
 
-- PDF 可開啟。
-- 不應出現 `???`。
-- `彰化縣員林市` 正確顯示。
-- `測試段` 正確顯示。
-- `一般用地稅率` 正確顯示。
-- `自用住宅用地稅率` 正確顯示。
-- `測試經紀人` 正確顯示。
-- `測試分店` 正確顯示。
-- 底部揭露資訊正確。
-- 浮水印為登入分店的 `watermarkText`。
+- No `???`.
+- Land data Chinese text displays correctly.
+- Business card Chinese text displays correctly.
+- Store disclosure is correct.
+- Watermark is correct.
 
-測完刪除：
+Do not commit the PDF.
 
-```powershell
-Remove-Item $pdfPath
-```
+## 6. V1.6 Production Tax Index Baseline
 
-## 5. PowerShell UTF-8 注意事項
-
-建議：
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-```
-
-API request 使用：
-
-```powershell
--ContentType "application/json; charset=utf-8"
-```
-
-若 PowerShell 顯示亂碼，但 PDF 內文字正常，優先以 PDF 視覺檢查為準。
-
-## 6. 驗收回報格式
-
-建議回報：
-
-- login 成功或失敗。
-- store profile 是否正確。
-- calculate 是否成功。
-- PDF API 是否成功。
-- PDF download 是否成功。
-- PDF 是否無 `???`。
-- 店家揭露資訊是否正確。
-- 浮水印是否正確。
-- 測試 PDF 是否已刪除。
+- `tax_price_indexes count = 808`
+- `first_year_month = 04801`
+- `latest_year_month = 11504`
+- sample Excel range ends at `11504`; therefore `11505` should not exist
+- smoke pair `04801` to `11504`
+- `previousIndexValue = 9.86`
+- `currentIndexValue = 111.23`
+- `taxIndexMultiplier = 11.280933062880326`
