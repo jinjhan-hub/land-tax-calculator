@@ -11,9 +11,9 @@ const ASCII_PATTERN = /^[\x00-\x7F]+$/;
 const TEXT_FIELDS_USING_STANDARD_FONT = new Set(["formulaVersion"]);
 
 type PdfPayload = {
-  confirmedLandData: Record<string, unknown>;
-  calculationResult: Record<string, unknown>;
-  businessCardData: { agentName?: string; phone?: string; storeName?: string };
+  confirmedLandData?: Record<string, unknown>;
+  calculationResult?: Record<string, unknown>;
+  businessCardData?: { agentName?: string; phone?: string; storeName?: string };
 };
 
 function valueToText(value: unknown): string {
@@ -43,6 +43,9 @@ function shouldUseStandardFont(fieldName: string, text: string) {
 }
 
 export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Array> {
+  const confirmedLandData = payload.confirmedLandData ?? {};
+  const calculationResult = payload.calculationResult ?? {};
+  const businessCardData = payload.businessCardData ?? {};
   const fontPath = resolvePdfFontPath();
   const templatePath = path.join(process.cwd(), landTaxPacificV1Template.pdfPath.replace(/^\/public\//, "public/"));
   const [templateBytes, fontBytes] = await Promise.all([fs.readFile(templatePath), fs.readFile(fontPath)]);
@@ -60,17 +63,17 @@ export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Arra
   const pages = pdfDoc.getPages();
 
   const values: Record<string, unknown> = {
-    ...payload.confirmedLandData,
-    ...payload.calculationResult,
-    agentName: payload.businessCardData.agentName,
-    agentPhone: payload.businessCardData.phone,
-    storeName: payload.businessCardData.storeName,
-    generalEstimatedTax: (payload.calculationResult.generalTaxResult as { estimatedTax?: number } | undefined)?.estimatedTax,
-    generalTaxableIncrement: payload.calculationResult.taxableIncrement,
-    generalRateNote: (payload.calculationResult.generalTaxResult as { rateNote?: string } | undefined)?.rateNote,
-    selfUseEstimatedTax: (payload.calculationResult.selfUseTaxResult as { estimatedTax?: number } | undefined)?.estimatedTax,
-    selfUseTaxableIncrement: payload.calculationResult.taxableIncrement,
-    selfUseRateNote: (payload.calculationResult.selfUseTaxResult as { rateNote?: string } | undefined)?.rateNote,
+    ...confirmedLandData,
+    ...calculationResult,
+    agentName: businessCardData.agentName ?? "",
+    agentPhone: businessCardData.phone ?? "",
+    storeName: businessCardData.storeName ?? "",
+    generalEstimatedTax: (calculationResult.generalTaxResult as { estimatedTax?: number } | undefined)?.estimatedTax,
+    generalTaxableIncrement: calculationResult.taxableIncrement,
+    generalRateNote: (calculationResult.generalTaxResult as { rateNote?: string } | undefined)?.rateNote,
+    selfUseEstimatedTax: (calculationResult.selfUseTaxResult as { estimatedTax?: number } | undefined)?.estimatedTax,
+    selfUseTaxableIncrement: calculationResult.taxableIncrement,
+    selfUseRateNote: (calculationResult.selfUseTaxResult as { rateNote?: string } | undefined)?.rateNote,
     generatedAt: new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
   };
 
