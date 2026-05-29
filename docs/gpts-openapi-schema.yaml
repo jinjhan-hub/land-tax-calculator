@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Land Tax Calculator GPTs Wrapper Actions
-  version: 0.2.0-draft
+  version: 0.2.1-draft
   description: GPTs Actions schema for the land-tax-calculator /api/gpts JSON wrapper endpoints. Do not put real auth codes, session tokens, secrets, PDFs, or full PDF download URLs in this file.
 servers:
   - url: https://land-tax-calculator-xi.vercel.app
@@ -230,6 +230,7 @@ components:
         landArea:
           type: number
           minimum: 0
+          description: Land area in square meters. Keep this consistent with prepare-pdf confirmedLandData.landArea.
         ownershipNumerator:
           type: number
           minimum: 0
@@ -242,13 +243,14 @@ components:
         currentTransferYearMonth:
           type: string
           pattern: "^[0-9]{5}$"
-          description: API field for 公告土地現值年月. Do not present this to users as 本次移轉年月.
+          description: API field whose user-facing meaning is 公告土地現值年月.
         previousDeclaredValuePerSqm:
           type: number
           minimum: 0
         currentDeclaredValuePerSqm:
           type: number
           minimum: 0
+          description: API field mapped from 公告土地現值.
         improvementCost:
           type: number
           minimum: 0
@@ -294,9 +296,10 @@ components:
           type: number
         currentIndexValue:
           type: number
+          description: Returned for reference only and not used as the adjustment multiplier.
         taxIndexMultiplier:
           type: number
-          description: Previous tax price index divided by 100. currentIndexValue is returned for reference and is not used as the multiplier.
+          description: Previous tax price index divided by 100.
         currentTotalValue:
           type: number
         adjustedPreviousTotalValue:
@@ -330,7 +333,7 @@ components:
         confirmedLandData:
           type: object
           additionalProperties: true
-          description: PDF land fields. Include land area, ownership, 公告土地現值年月, values, and urban planning fields.
+          description: PDF land fields. Include location, area, ownership, announced land value month/value, and urban planning fields.
           properties:
             landCityDistrict:
               type: string
@@ -354,9 +357,9 @@ components:
               example: "1/1"
             landUrbanPlanningLabel:
               type: string
-              enum: [都市計畫內, 非都市計畫內]
+              enum: ["都市計畫內", "非都市計畫內"]
               description: Urban planning display label for the PDF.
-              example: 非都市計畫內
+              example: "非都市計畫內"
             landUrbanPlanningType:
               type: string
               enum: [urban, nonUrban]

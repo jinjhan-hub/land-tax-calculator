@@ -1,6 +1,6 @@
-# V1.7.4 GPTs Production Test Script
+# V1.7.5 GPTs Production Test Script
 
-This script verifies GPTs prompt cleanup, sessionToken handoff, transcript area parsing, urban planning type parsing, simplified tax samples, and PDF display. Do not paste real auth codes, full session tokens, full download URLs, PDF files, or test JSON into Git.
+This script verifies GPTs prompt cleanup, sessionToken handoff, transcript parsing, simplified tax samples, PDF display, and PDF download behavior. Do not paste real auth codes, full session tokens, admin tokens, full PDF download URLs, PDF files, or test JSON into Git.
 
 Production server:
 
@@ -16,25 +16,44 @@ Preferred GPTs endpoints:
 
 ## Prompt Cleanup
 
-GPTs must not ask:
-
-- 是否有未顯示於目前對話中的個人記憶？
-- 是否有偏好或限制會影響本次試算？
-- 是否延續先前案件？
-- 是否沿用上一筆資料？
-- 是否有隱藏資料需要我使用？
-
 Before login, GPTs should say:
 
 ```text
 請提供分店代碼與分店驗證碼，我會先完成登入。
 ```
 
-After login when land data is incomplete, GPTs should directly list missing fields and use「公告土地現值年月」, not「本次移轉年月」.
+GPTs must not ask users whether it should use hidden or external context, including:
+
+- 是否需要依賴目前對話以外的個人記憶來試算土地增值稅？
+- 是否有未顯示於目前對話中的個人記憶？
+- 是否有偏好或限制會影響本次試算？
+- 是否延續先前案件？
+- 是否沿用上一筆資料？
+- 是否有隱藏資料需要我使用？
+
+Land tax calculations may use only currently visible conversation data, data supplied in this turn, uploaded transcript content, and API responses.
+
+After login when land data is incomplete, GPTs should directly list missing fields and use `公告土地現值年月`:
+
+```text
+登入成功。接下來請提供土地資料，或直接上傳土地登記謄本，我可以協助判讀。
+
+需要的資料如下：
+- 土地面積（平方公尺）
+- 權利範圍，例如 1/1、1/2
+- 公告土地現值年月
+- 公告土地現值（元／平方公尺）
+- 前次移轉年月
+- 前次移轉現值或原規定地價（元／平方公尺）
+
+注意：不需要提供買賣日期、登記日期或送件日期。
+```
 
 ## Simplified Formula Samples
 
-Shared values:
+Do not add or validate against the invalid `10605` Ministry sample with `landArea = 260.63` and `ownershipRange = 1/1`. That source has multiple ownership holders, so it is not a confirmed single-holder sample.
+
+Shared values for the simplified samples:
 
 - `previousTransferYearMonth = 10210`
 - `currentTransferYearMonth = 11501`
@@ -46,49 +65,57 @@ Shared values:
 Case A:
 
 - `landArea = 107.77`
-- expected general land estimated tax ≈ `7,908`
-- expected self-use 10% scenario ≈ `3,954`
+- expected general land estimated tax: about `7,908`
+- expected self-use 10% scenario: about `3,954`
 
 Case B:
 
 - `landArea = 1,073.77`
-- expected general land estimated tax ≈ `78,790`
-- expected self-use 10% scenario ≈ `39,395`
+- expected general land estimated tax: about `78,790`
+- expected self-use 10% scenario: about `39,395`
 
-If the user expects about `78,790` but the PDF shows `landArea = 107.77`, GPTs should ask the user to confirm the land area. GPTs must not generate PDF while land area is uncertain.
+If the user expects about `78,790` but the PDF shows `landArea = 107.77`, GPTs should ask the user to confirm the land area. GPTs must not generate a PDF while land area is uncertain.
 
-## Land Area Parsing
-
-Validate:
-
-1. 土地面積必須從謄本「面積：****數字 平方公尺」欄位判讀。
-2. 面積可能包含千分位逗號，例如 `1,073.77`。
-3. GPTs 不得漏讀千分位逗號，導致 `1,073.77` 誤判為 `107.77`。
-4. calculate payload and prepare-pdf payload must use the same `landArea`.
-5. PDF 顯示土地面積必須與 calculate 使用的 `landArea` 一致。
-
-## Urban Planning Type Parsing
+## Transcript Parsing Validation
 
 Validate:
 
-1. 謄本中「使用分區：特定農業區」「使用地類別：農牧用地」應判讀為非都市計畫內。
-2. 謄本中「使用分區：（空白）」「使用地類別：（空白）」應判讀為都市計畫內。
-3. GPTs prepare-pdf payload 應帶入 `landUrbanPlanningLabel`。
-4. PDF 土地基本資料區應顯示都市計畫別。
-5. 都市計畫別不得影響土地增值稅公式。
-6. 若無法判讀都市計畫別，GPTs 應要求使用者補充。
-7. PDF 新增都市計畫別欄位後，不得造成土地基本資料區溢出、重疊或欄位空白。
+1. Land area must be read from the transcript field `面積：****數字 平方公尺`.
+2. Land area may include a thousands comma, for example `1,073.77`.
+3. GPTs must not drop the thousands comma and misread `1,073.77` as `107.77`.
+4. Calculate payload and prepare-pdf payload must use the same `landArea`.
+5. PDF displayed land area must match the `landArea` used for calculation.
+6. If the transcript shows multiple ownership holders, different ownership ranges, or multiple ownership sections, GPTs must ask which ownership holder is being transferred and what ownership range applies.
+7. GPTs must not use the whole parcel area with `1/1` to judge a multi-owner case.
+
+Suggested multi-owner prompt:
+
+```text
+這筆土地看起來有多位持分人。請確認本次要試算哪一位持分人的移轉，並提供該持分人的權利範圍，例如 1/2、1/3 或 1/1。我會依該持分比例分開試算。
+```
+
+## Urban Planning Type Validation
+
+Validate:
+
+1. Transcript `使用分區：特定農業區` and `使用地類別：農牧用地` should parse as `非都市計畫內`.
+2. Transcript blank `使用分區` and blank `使用地類別` should parse as `都市計畫內`.
+3. GPTs prepare-pdf payload should include `landUrbanPlanningLabel`.
+4. PDF land basic data section should display `都市計畫別`.
+5. Urban planning type must not affect tax formulas.
+6. If urban planning type cannot be parsed, GPTs should ask the user to supplement it.
+7. The new PDF urban planning field must not cause overflow, overlap, or blank land basic data fields.
 
 ## Prepare PDF AUTH_FAILED
 
 Validate:
 
-1. 呼叫 `gptsPreparePdf` 時必須使用目前登入成功後取得的 sessionToken。
-2. 若 Authorization header 不可用，必須把 sessionToken 放入 request body `sessionToken`。
-3. 若 `gptsPreparePdf` 回 `AUTH_FAILED`，不得重複亂試或自動產生 PDF。
+1. `gptsPreparePdf` must use the currently valid sessionToken from the successful login.
+2. If Authorization header is unavailable, GPTs must put the token in request body `sessionToken`.
+3. If `gptsPreparePdf` returns `AUTH_FAILED`, GPTs must not retry blindly or auto-generate a PDF.
 4. GPTs should ask the user to login again.
-5. 重新登入後，必須確認仍有 calculate 結果、土地基本資料、都市計畫別、名片／聯絡資訊，才能再次 prepare-pdf。
-6. 不得把 sessionToken 顯示給使用者。
+5. After a new login, GPTs must still confirm calculation result, land basic data, and contact-card information before calling prepare-pdf again.
+6. GPTs must not display the sessionToken to the user.
 
 ## Prepare PDF Payload
 
@@ -109,13 +136,37 @@ Minimum `confirmedLandData` for PDF:
 }
 ```
 
-PDF visible labels should use:
+PDF and GPTs visible labels should use:
 
-- 公告土地現值年月 in GPTs prompts
-- 公告現值年月 in compact PDF tables
-- 自用住宅優惠稅率 10% 情境試算
+- `公告土地現值年月` in GPTs prompts
+- `公告現值年月` in compact PDF tables
+- `自用住宅優惠稅率 10% 情境試算`
 
-PDF and GPTs must not show「本次移轉年月」as a user-facing field.
+Do not present the API field `currentTransferYearMonth` as a user-facing label.
+
+## PDF Download Behavior
+
+When prepare-pdf succeeds, GPTs must provide a clickable markdown link in the current conversation:
+
+```text
+[下載 PDF 試算報告](downloadUrl)
+```
+
+Validation rules:
+
+1. Use the API-returned `downloadUrl` only as the markdown link target in the current user conversation.
+2. Do not show a naked full URL.
+3. Tell the user that the link expires in 15 minutes.
+4. Do not write the full URL into documents, commits, test records, summaries, logs, or public records.
+
+## Self-Use Scope
+
+Current behavior supports:
+
+- general land calculation
+- self-use residential 10% scenario calculation
+
+Current behavior does not support partial self-use compound-rate calculation. GPTs must not describe the current result as partial self-use.
 
 ## Cleanup
 
