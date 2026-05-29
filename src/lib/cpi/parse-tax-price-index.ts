@@ -41,7 +41,7 @@ export function parseTaxPriceIndexWorkbook(fileBuffer: Buffer): TaxPriceIndexRow
   const result: TaxPriceIndexRow[] = [];
   const seen = new Set<string>();
 
-  for (const row of rows.slice(3)) {
+  for (const row of rows.slice(2)) {
     const rocYear = parseRocYear(row[0]);
     if (!rocYear) {
       continue;
