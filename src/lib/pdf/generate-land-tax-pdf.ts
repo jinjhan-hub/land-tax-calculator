@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb } from "pdf-lib";
-import { getRequiredEnv } from "@/lib/env";
 import { landTaxPacificV1Template, type PdfFieldSpec } from "@/templates/land-tax/pacific-v1.fields";
+
+const DEFAULT_PDF_FONT_PATH = "assets/fonts/NotoSansTC-Regular.ttf";
 
 type PdfPayload = {
   confirmedLandData: Record<string, unknown>;
@@ -22,14 +23,19 @@ function hexToRgb(color?: string) {
   return rgb(parseInt(clean.slice(0, 2), 16) / 255, parseInt(clean.slice(2, 4), 16) / 255, parseInt(clean.slice(4, 6), 16) / 255);
 }
 
+function resolvePdfFontPath() {
+  const configuredPath = process.env.PDF_FONT_PATH?.trim() || DEFAULT_PDF_FONT_PATH;
+  return path.isAbsolute(configuredPath) ? configuredPath : path.join(process.cwd(), configuredPath);
+}
+
 export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Array> {
-  const fontPath = getRequiredEnv("PDF_FONT_PATH");
+  const fontPath = resolvePdfFontPath();
   const templatePath = path.join(process.cwd(), landTaxPacificV1Template.pdfPath.replace(/^\/public\//, "public/"));
   const [templateBytes, fontBytes] = await Promise.all([fs.readFile(templatePath), fs.readFile(fontPath)]);
 
   const pdfDoc = await PDFDocument.load(templateBytes);
   pdfDoc.registerFontkit(fontkit);
-  const font = await pdfDoc.embedFont(fontBytes, { subset: true });
+  const font = await pdfDoc.embedFont(fontBytes, { subset: false });
   const pages = pdfDoc.getPages();
 
   const values: Record<string, unknown> = {
@@ -57,5 +63,5 @@ export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Arra
     page.drawText(text, { x: Math.max(field.x, x), y: field.y, size: field.fontSize, font, color: hexToRgb(field.color), maxWidth: field.maxWidth });
   }
 
-  return pdfDoc.save();
+  return pdfDoc.save({ useObjectStreams: false });
 }
