@@ -38,16 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       downloadUrl: `${protocol}://${host}/api/land-tax/pdf/download?token=${token}`,
       expiresInMinutes: PDF_TOKEN_TTL_MINUTES,
     });
-    } catch (error) {
-    console.error("[land-tax-pdf] PDF generation failed", {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      hasPdfTokenSecret: Boolean(process.env.PDF_TOKEN_SECRET),
-      pdfFontPath: process.env.PDF_FONT_PATH,
-      cwd: process.cwd(),
-      nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL_ENV,
-    });
+  } catch (error) {
+    console.error("[land-tax-pdf]", error instanceof Error ? error.message : String(error));
 
     return res.status(error instanceof Error && error.message === "AUTH_FAILED" ? 401 : 400).json({
       success: false,
