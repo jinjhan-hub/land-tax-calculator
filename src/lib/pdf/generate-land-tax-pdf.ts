@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { StoreProfile } from "@/lib/auth/store-users";
+import { createStoreDisclosureLines, resolveWatermarkText } from "@/lib/pdf/store-profile-text";
 import { landTaxPacificV1Template, type PdfFieldSpec } from "@/templates/land-tax/pacific-v1.fields";
 
 const DEFAULT_PDF_FONT_PATH = "assets/fonts/NotoSansTC-Regular.ttf";
@@ -42,7 +44,7 @@ function shouldUseStandardFont(fieldName: string, text: string) {
   return TEXT_FIELDS_USING_STANDARD_FONT.has(fieldName) && ASCII_PATTERN.test(text);
 }
 
-export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Array> {
+export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: StoreProfile | null): Promise<Uint8Array> {
   const confirmedLandData = payload.confirmedLandData ?? {};
   const calculationResult = payload.calculationResult ?? {};
   const businessCardData = payload.businessCardData ?? {};
@@ -89,6 +91,36 @@ export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Arra
     const textWidth = font.widthOfTextAtSize(text, field.fontSize);
     const x = field.align === "right" ? field.x + field.maxWidth - textWidth : field.align === "center" ? field.x + (field.maxWidth - textWidth) / 2 : field.x;
     page.drawText(text, { x: Math.max(field.x, x), y: field.y, size: field.fontSize, font, color: hexToRgb(field.color), maxWidth: field.maxWidth });
+  }
+
+  const watermarkText = resolveWatermarkText(storeProfile);
+  const disclosureLines = createStoreDisclosureLines(storeProfile);
+  for (const page of pages) {
+    const { width, height } = page.getSize();
+    page.drawText(watermarkText, {
+      x: width * 0.16,
+      y: height * 0.44,
+      size: 34,
+      font: cjkFont,
+      color: rgb(0.62, 0.68, 0.75),
+      opacity: 0.18,
+      rotate: degrees(32),
+    });
+  }
+
+  if (disclosureLines.length > 0) {
+    const page = pages[pages.length - 1];
+    const { width } = page.getSize();
+    disclosureLines.forEach((line, index) => {
+      page.drawText(line, {
+        x: 36,
+        y: 24 - index * 13,
+        size: 9,
+        font: cjkFont,
+        color: rgb(0.28, 0.32, 0.38),
+        maxWidth: width - 72,
+      });
+    });
   }
 
   return pdfDoc.save({ useObjectStreams: false });

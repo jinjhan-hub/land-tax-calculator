@@ -8,12 +8,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, errorCode: "UNKNOWN_ERROR" });
   }
 
-  const { storeCode, userCode, authCode } = req.body ?? {};
-  const result = await validateStoreUser({ storeCode, userCode, authCode });
+  const { storeCode, authCode } = req.body ?? {};
+  const result = await validateStoreUser({ storeCode, authCode });
   if (!result.valid) {
-    return res.status(401).json({ success: false, errorCode: "AUTH_FAILED" });
+    return res.status(401).json({ success: false, errorCode: "AUTH_FAILED", reason: result.reason });
   }
 
-  const session = createSessionToken(storeCode, userCode);
-  return res.status(200).json({ success: true, ...session });
+  const session = createSessionToken(result.store?.storeCode ?? storeCode, result.userCode ?? "STORE");
+  return res.status(200).json({ success: true, sessionToken: session.sessionToken, store: result.store });
 }

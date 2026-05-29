@@ -7,3 +7,7 @@ dist/
 coverage/
 *.tsbuildinfo
 public/fonts/
+store-user-credentials-*.csv
+store-users-private-*.csv
+credentials-*.csv
+*.credentials.csv

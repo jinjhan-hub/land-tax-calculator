@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { requireSession } from "@/lib/api/auth";
 import { toErrorCode } from "@/lib/api/errors";
+import { fetchStoreProfileByCodes } from "@/lib/auth/store-users";
 import { generateLandTaxPdf } from "@/lib/pdf/generate-land-tax-pdf";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { encryptPdfData } from "@/lib/tokens/pdf-encryption";
@@ -15,13 +16,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    requireSession(req);
+    const session = requireSession(req);
     const rawBody = JSON.stringify(req.body ?? {});
     if (FORBIDDEN_INPUT_KEYS.some((key) => rawBody.includes(key))) {
       return res.status(400).json({ success: false, errorCode: "PDF_GENERATION_FAILED" });
     }
 
-    const pdfBytes = await generateLandTaxPdf(req.body);
+    const storeProfile = await fetchStoreProfileByCodes(session.storeCode, session.userCode);
+    const pdfBytes = await generateLandTaxPdf(req.body, storeProfile);
     const { token, tokenHash, expiresAt } = createPdfDownloadToken();
     const supabase = createSupabaseAdminClient();
     const { error } = await supabase.from("land_tax_temp_pdf_files").insert({
