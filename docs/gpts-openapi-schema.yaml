@@ -4,9 +4,8 @@ info:
   version: 0.2.0-draft
   description: |
     Draft OpenAPI schema for GPTs Actions using the JSON-friendly /api/gpts/*
-    wrapper endpoints. The wrappers reuse the existing production APIs for
-    login, calculation, and PDF preparation. Do not put real auth codes,
-    session tokens, secrets, or full PDF download URLs in this file.
+    wrapper endpoints. Do not put real auth codes, session tokens, secrets,
+    or full PDF download URLs in this file.
 servers:
   - url: https://land-tax-calculator-xi.vercel.app
     description: Production Vercel deployment
@@ -20,9 +19,7 @@ paths:
       tags: [GPTs]
       operationId: gptsLogin
       summary: Login a store for GPTs
-      description: |
-        Wrapper around POST /api/auth/login. Request uses storeCode and authCode.
-        The backend still fixes userCode to STORE through the existing auth flow.
+      description: Authenticate a store user and create a short-lived session for GPTs land tax calculation.
       requestBody:
         required: true
         content:
@@ -47,14 +44,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
+
   /api/gpts/calculate:
     post:
       tags: [GPTs]
       operationId: gptsCalculate
       summary: Calculate land value increment tax for GPTs
-      description: |
-        Wrapper around POST /api/land-tax/calculate. It does not reimplement or
-        modify the tax formula.
+      description: Calculate land value increment tax through the GPTs wrapper. Use only after login succeeds.
       security:
         - bearerAuth: []
       requestBody:
@@ -121,17 +117,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
+
   /api/gpts/prepare-pdf:
     post:
       tags: [GPTs]
       operationId: gptsPreparePdf
       summary: Prepare a PDF for GPTs and return JSON metadata
-      description: |
-        Wrapper around POST /api/land-tax/pdf. It does not generate a PDF token
-        itself and does not modify PDF rendering logic. The response is JSON and
-        includes downloadUrl, expiresInMinutes, and storeProfileSummary.
-        The PDF download URL is short-lived. GPTs should present it to the user
-        instead of trying to parse binary PDF content.
+      description: Prepare a short-lived PDF download link after a successful calculation. Return JSON only. Do not parse PDF binary content or store tokens.
       security:
         - bearerAuth: []
       requestBody:
@@ -191,6 +183,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -198,6 +191,7 @@ components:
       scheme: bearer
       bearerFormat: sessionToken
       description: Short-lived sessionToken returned by gptsLogin.
+
   schemas:
     LoginRequest:
       type: object
@@ -211,6 +205,7 @@ components:
           type: string
           format: password
           example: DO_NOT_USE_REAL_AUTH_CODE
+
     StoreProfile:
       type: object
       additionalProperties: false
@@ -237,6 +232,7 @@ components:
           type: [string, "null"]
           format: date
           example: "2099-08-26"
+
     GptsLoginSuccess:
       type: object
       additionalProperties: false
@@ -256,6 +252,7 @@ components:
               $ref: "#/components/schemas/StoreProfile"
         nextAction:
           const: calculate
+
     CalculateRequest:
       type: object
       additionalProperties: false
@@ -301,6 +298,7 @@ components:
           type: number
           minimum: 0
           default: 0
+
     TaxResult:
       type: object
       additionalProperties: false
@@ -310,6 +308,7 @@ components:
           type: number
         rateNote:
           type: string
+
     CalculateResult:
       type: object
       additionalProperties: true
@@ -346,6 +345,7 @@ components:
           $ref: "#/components/schemas/TaxResult"
         selfUseTaxResult:
           $ref: "#/components/schemas/TaxResult"
+
     GptsCalculateSuccess:
       type: object
       additionalProperties: false
@@ -357,6 +357,7 @@ components:
           $ref: "#/components/schemas/CalculateResult"
         nextAction:
           const: prepare-pdf
+
     PdfPrepareRequest:
       type: object
       additionalProperties: false
@@ -379,6 +380,7 @@ components:
               type: string
             storeName:
               type: string
+
     GptsPreparePdfSuccess:
       type: object
       additionalProperties: false
@@ -404,6 +406,7 @@ components:
                 - type: "null"
         nextAction:
           const: download
+
     GptsError:
       type: object
       additionalProperties: false
