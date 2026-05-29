@@ -49,7 +49,7 @@ export function calculateLandTax(
   }
 
   const ownershipRatio = input.ownershipNumerator / input.ownershipDenominator;
-  const taxIndexMultiplier = indexes.currentIndexValue / indexes.previousIndexValue;
+  const taxIndexMultiplier = indexes.previousIndexValue / 100;
   const previousTotalValue = input.landArea * ownershipRatio * input.previousDeclaredValuePerSqm;
   const adjustedPreviousTotalValue = previousTotalValue * taxIndexMultiplier;
   const currentTotalValue = input.landArea * ownershipRatio * input.currentDeclaredValuePerSqm;

@@ -149,7 +149,8 @@ The accepted production tax index baseline is:
 - Smoke pair: `previousTransferYearMonth = 04801`, `currentTransferYearMonth = 11504`
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
-- `taxIndexMultiplier = 11.280933062880326`
+- `taxIndexMultiplier = 0.0986`
+- `taxIndexMultiplier` is `previousIndexValue / 100`; `currentIndexValue` is returned for reference only.
 
 If GPTs receives `TAX_INDEX_NOT_FOUND`, it should ask the user to verify the year-month values or ask an operator to check the production tax index data. GPTs must not invent missing index values.
 

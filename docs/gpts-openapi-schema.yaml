@@ -89,15 +89,15 @@ paths:
                       formulaVersion: land-tax-v1.0.0
                       previousIndexValue: 9.86
                       currentIndexValue: 111.23
-                      taxIndexMultiplier: 11.280933062880326
+                      taxIndexMultiplier: 0.0986
                       currentTotalValue: 500000
-                      adjustedPreviousTotalValue: 1128093.3062880326
-                      taxableIncrement: 0
+                      adjustedPreviousTotalValue: 9860
+                      taxableIncrement: 490140
                       generalTaxResult:
-                        estimatedTax: 0
+                        estimatedTax: 98028
                         rateNote: RATE_NOTE_PLACEHOLDER
                       selfUseTaxResult:
-                        estimatedTax: 0
+                        estimatedTax: 49014
                         rateNote: RATE_NOTE_PLACEHOLDER
                     nextAction: prepare-pdf
         "400":
@@ -151,15 +151,15 @@ paths:
                     formulaVersion: land-tax-v1.0.0
                     previousIndexValue: 9.86
                     currentIndexValue: 111.23
-                    taxIndexMultiplier: 11.280933062880326
+                    taxIndexMultiplier: 0.0986
                     currentTotalValue: 500000
-                    adjustedPreviousTotalValue: 1128093.3062880326
-                    taxableIncrement: 0
+                    adjustedPreviousTotalValue: 9860
+                    taxableIncrement: 490140
                     generalTaxResult:
-                      estimatedTax: 0
+                      estimatedTax: 98028
                       rateNote: RATE_NOTE_PLACEHOLDER
                     selfUseTaxResult:
-                      estimatedTax: 0
+                      estimatedTax: 49014
                       rateNote: RATE_NOTE_PLACEHOLDER
                   businessCardData:
                     agentName: AGENT_NAME_PLACEHOLDER
@@ -341,6 +341,7 @@ components:
           type: number
         taxIndexMultiplier:
           type: number
+          description: Previous tax price index divided by 100. currentIndexValue is returned for reference and is not used as the multiplier.
         currentTotalValue:
           type: number
         adjustedPreviousTotalValue:

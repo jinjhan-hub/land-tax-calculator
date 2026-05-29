@@ -142,4 +142,5 @@ Key Action-related reminders:
 - `11505` should not exist in the sample production dataset
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
-- `taxIndexMultiplier = 11.280933062880326`
+- `taxIndexMultiplier = 0.0986`
+- `taxIndexMultiplier` means previous tax price index divided by 100; `currentIndexValue` is returned for reference only.

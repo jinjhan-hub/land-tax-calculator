@@ -108,7 +108,8 @@ Expected:
 - `data.formulaVersion = land-tax-v1.0.0`
 - `data.previousIndexValue = 9.86`
 - `data.currentIndexValue = 111.23`
-- `data.taxIndexMultiplier = 11.280933062880326`
+- `data.taxIndexMultiplier = 0.0986`
+- `data.taxIndexMultiplier` is `previousIndexValue / 100`; `currentIndexValue` is returned for reference only.
 - `nextAction = prepare-pdf`
 
 ## 3. Wrapper TAX_INDEX_NOT_FOUND
@@ -206,4 +207,5 @@ Do not commit the PDF.
 - smoke pair `04801` to `11504`
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
-- `taxIndexMultiplier = 11.280933062880326`
+- `taxIndexMultiplier = 0.0986`
+- `taxIndexMultiplier` is `previousIndexValue / 100`; `currentIndexValue` is returned for reference only.

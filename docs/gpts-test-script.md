@@ -24,7 +24,8 @@ Use the V1.6 verified CPI index baseline:
 - sample Excel 範圍只到 `11504`，因此 `11505` 不應存在
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
-- `taxIndexMultiplier = 11.280933062880326`
+- `taxIndexMultiplier = 0.0986`
+- `taxIndexMultiplier` means previous tax price index divided by 100; do not calculate it as current index divided by previous index.
 
 ## Login Tests
 

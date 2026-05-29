@@ -302,7 +302,8 @@ landCityDistrict：彰化縣北斗鎮
 - 可用 smoke test 年月：`04801` 到 `11504`
 - `previousIndexValue = 9.86`
 - `currentIndexValue = 111.23`
-- `taxIndexMultiplier = 11.280933062880326`
+- `taxIndexMultiplier = 0.0986`
+- `taxIndexMultiplier` 代表「前次移轉年月的稅務專用物價指數 ÷ 100」；`currentIndexValue` 只作參考，不得用於計算調整倍率。
 
 若使用者提供不存在的年月造成 `TAX_INDEX_NOT_FOUND`，請要求更正年月或確認 production tax index 資料，不得自行補算。
 
