@@ -8,7 +8,7 @@ import { encryptPdfData } from "@/lib/tokens/pdf-encryption";
 import { createPdfDownloadToken, PDF_TOKEN_TTL_MINUTES } from "@/lib/tokens/pdf-token";
 
 const FORBIDDEN_INPUT_KEYS = ["image", "base64", "businessCardImageUrl", "openaiFileIdRefs", "portraitAvailable", "portraitCropArea"];
-const REQUIRED_PDF_LAND_FIELDS = ["landCityDistrict", "landSection", "landNumber", "landArea", "ownershipRange"] as const;
+const REQUIRED_PDF_LAND_FIELDS = ["landCityDistrict", "landSection", "landNumber", "landArea", "ownershipRange", "landUrbanPlanningLabel"] as const;
 
 function cleanText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -24,10 +24,33 @@ function firstValue(source: Record<string, unknown>, keys: string[]): unknown {
   return undefined;
 }
 
+function hasOwn(source: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
 function normalizeOwnershipRange(value: unknown): unknown {
   const text = cleanText(value);
   if (!text) return value;
   return text === "全部" ? "1/1" : text;
+}
+
+function normalizeUrbanPlanningLabel(landData: Record<string, unknown>): unknown {
+  const explicitLabel = cleanText(firstValue(landData, ["landUrbanPlanningLabel", "urbanPlanningLabel"]));
+  if (explicitLabel === "都市計畫內" || explicitLabel === "非都市計畫內") return explicitLabel;
+
+  const explicitType = cleanText(firstValue(landData, ["landUrbanPlanningType", "urbanPlanningType"]));
+  if (explicitType === "urban") return "都市計畫內";
+  if (explicitType === "nonUrban") return "非都市計畫內";
+
+  const hasUseDistrict = hasOwn(landData, "useDistrict");
+  const hasLandUseCategory = hasOwn(landData, "landUseCategory");
+  if (hasUseDistrict || hasLandUseCategory) {
+    const useDistrict = cleanText(landData.useDistrict);
+    const landUseCategory = cleanText(landData.landUseCategory);
+    return useDistrict || landUseCategory ? "非都市計畫內" : "都市計畫內";
+  }
+
+  return undefined;
 }
 
 function normalizePdfPayload(body: unknown): Record<string, unknown> {
@@ -43,6 +66,7 @@ function normalizePdfPayload(body: unknown): Record<string, unknown> {
   confirmedLandData.landNumber = firstValue(confirmedLandData, ["landNumber", "landNo", "lotNumber", "cadastralNumber"]);
   confirmedLandData.landArea = firstValue(confirmedLandData, ["landArea", "area", "landAreaSqm"]);
   confirmedLandData.ownershipRange = normalizeOwnershipRange(firstValue(confirmedLandData, ["ownershipRange", "rightScope", "rightsRange"]));
+  confirmedLandData.landUrbanPlanningLabel = normalizeUrbanPlanningLabel(confirmedLandData);
   confirmedLandData.currentTransferYearMonth = firstValue(confirmedLandData, [
     "currentTransferYearMonth",
     "announcedLandValueYearMonth",

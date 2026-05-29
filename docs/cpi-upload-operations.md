@@ -137,7 +137,7 @@ select * from public.tax_price_index_import_logs order by created_at desc limit 
 當 /api/gpts/calculate 回傳 errorCode = TAX_INDEX_NOT_FOUND 時，GPTs 不可繼續呼叫 prepare-pdf。
 
 建議回覆：
-目前無法完成試算，因為系統查不到指定年月的稅務用物價指數。請確認前次移轉年月與本次移轉年月是否正確；若年月正確，代表後台尚未匯入該月份指數資料。這不是土地增值稅公式錯誤，而是物價指數資料尚未建檔。
+目前無法完成試算，因為系統查不到指定年月的稅務用物價指數。請確認前次移轉年月與公告土地現值年月是否正確；若年月正確，代表後台尚未匯入該月份指數資料。這不是土地增值稅公式錯誤，而是物價指數資料尚未建檔。
 
 ## 11. 安全注意事項
 

@@ -148,6 +148,7 @@ $pdfPayload = @{
     landNumber = "123-1"
     landArea = 100
     ownershipRange = "1/1"
+    landUrbanPlanningLabel = "都市計畫內"
     previousTransferYearMonth = "04801"
     currentTransferYearMonth = "11504"
     previousDeclaredValuePerSqm = 1000

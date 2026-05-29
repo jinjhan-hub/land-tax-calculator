@@ -2,17 +2,13 @@ openapi: 3.1.0
 info:
   title: Land Tax Calculator GPTs Wrapper Actions
   version: 0.2.0-draft
-  description: |
-    Draft OpenAPI schema for GPTs Actions using the JSON-friendly /api/gpts/*
-    wrapper endpoints. Do not put real auth codes, session tokens, secrets,
-    or full PDF download URLs in this file.
+  description: GPTs Actions schema for the land-tax-calculator /api/gpts JSON wrapper endpoints. Do not put real auth codes, session tokens, secrets, PDFs, or full PDF download URLs in this file.
 servers:
   - url: https://land-tax-calculator-xi.vercel.app
     description: Production Vercel deployment
 tags:
   - name: GPTs
     description: JSON-friendly wrapper endpoints for GPTs Actions.
-security: []
 paths:
   /api/gpts/login:
     post:
@@ -44,7 +40,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
-
   /api/gpts/calculate:
     post:
       tags: [GPTs]
@@ -59,20 +54,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CalculateRequest"
-            examples:
-              v16ProductionBaseline:
-                value:
-                  landArea: 100
-                  ownershipNumerator: 1
-                  ownershipDenominator: 1
-                  previousTransferYearMonth: "04801"
-                  currentTransferYearMonth: "11504"
-                  previousDeclaredValuePerSqm: 1000
-                  currentDeclaredValuePerSqm: 5000
-                  improvementCost: 0
-                  landReadjustmentCost: 0
-                  engineeringBenefitFee: 0
-                  sessionToken: SESSION_TOKEN_PLACEHOLDER
       responses:
         "200":
           description: Calculation succeeded.
@@ -80,26 +61,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsCalculateSuccess"
-              examples:
-                v16ProductionBaseline:
-                  value:
-                    success: true
-                    data:
-                      success: true
-                      formulaVersion: land-tax-v1.0.0
-                      previousIndexValue: 9.86
-                      currentIndexValue: 111.23
-                      taxIndexMultiplier: 0.0986
-                      currentTotalValue: 500000
-                      adjustedPreviousTotalValue: 9860
-                      taxableIncrement: 490140
-                      generalTaxResult:
-                        estimatedTax: 98028
-                        rateNote: RATE_NOTE_PLACEHOLDER
-                      selfUseTaxResult:
-                        estimatedTax: 49014
-                        rateNote: RATE_NOTE_PLACEHOLDER
-                    nextAction: prepare-pdf
         "400":
           description: Invalid land input or calculation failure.
           content:
@@ -113,12 +74,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/GptsError"
         "404":
-          description: CPI index was not found.
+          description: Tax price index was not found.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
-
   /api/gpts/prepare-pdf:
     post:
       tags: [GPTs]
@@ -134,38 +94,39 @@ paths:
             schema:
               $ref: "#/components/schemas/PdfPrepareRequest"
             examples:
-              v16ProductionBaseline:
+              simplified:
                 value:
+                  sessionToken: SESSION_TOKEN_PLACEHOLDER
                   confirmedLandData:
                     landCityDistrict: CITY_DISTRICT_PLACEHOLDER
                     landSection: LAND_SECTION_PLACEHOLDER
-                    landNumber: "123-1"
-                    landArea: 100
+                    landNumber: "0318-0000"
+                    landArea: 1073.77
                     ownershipRange: "1/1"
-                    previousTransferYearMonth: "04801"
-                    currentTransferYearMonth: "11504"
-                    previousDeclaredValuePerSqm: 1000
-                    currentDeclaredValuePerSqm: 5000
+                    landUrbanPlanningLabel: "非都市計畫內"
+                    previousTransferYearMonth: "10210"
+                    currentTransferYearMonth: "11501"
+                    previousDeclaredValuePerSqm: 1619.6
+                    currentDeclaredValuePerSqm: 1900
                   calculationResult:
                     success: true
                     formulaVersion: land-tax-v1.0.0
-                    previousIndexValue: 9.86
-                    currentIndexValue: 111.23
-                    taxIndexMultiplier: 0.0986
-                    currentTotalValue: 500000
-                    adjustedPreviousTotalValue: 9860
-                    taxableIncrement: 490140
+                    previousIndexValue: 94.66
+                    currentIndexValue: 110.22
+                    taxIndexMultiplier: 0.9466
+                    currentTotalValue: 2040163
+                    adjustedPreviousTotalValue: 1646211.1325672
+                    taxableIncrement: 393951.8674328
                     generalTaxResult:
-                      estimatedTax: 98028
+                      estimatedTax: 78790
                       rateNote: RATE_NOTE_PLACEHOLDER
                     selfUseTaxResult:
-                      estimatedTax: 49014
-                      rateNote: RATE_NOTE_PLACEHOLDER
+                      estimatedTax: 39395
+                      rateNote: 自用住宅優惠稅率 10% 情境試算
                   businessCardData:
                     agentName: AGENT_NAME_PLACEHOLDER
                     phone: PHONE_PLACEHOLDER
                     storeName: CONTACT_STORE_NAME_PLACEHOLDER
-                  sessionToken: SESSION_TOKEN_PLACEHOLDER
       responses:
         "200":
           description: PDF was prepared successfully.
@@ -174,7 +135,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GptsPreparePdfSuccess"
         "400":
-          description: PDF generation failed or forbidden input keys were included.
+          description: PDF generation failed or required PDF display fields were missing.
           content:
             application/json:
               schema:
@@ -185,7 +146,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GptsError"
-
 components:
   securitySchemes:
     bearerAuth:
@@ -193,7 +153,6 @@ components:
       scheme: bearer
       bearerFormat: sessionToken
       description: Short-lived sessionToken returned by gptsLogin.
-
   schemas:
     LoginRequest:
       type: object
@@ -207,7 +166,6 @@ components:
           type: string
           format: password
           example: DO_NOT_USE_REAL_AUTH_CODE
-
     StoreProfile:
       type: object
       additionalProperties: false
@@ -234,7 +192,6 @@ components:
           type: [string, "null"]
           format: date
           example: "2099-08-26"
-
     GptsLoginSuccess:
       type: object
       additionalProperties: false
@@ -254,7 +211,6 @@ components:
               $ref: "#/components/schemas/StoreProfile"
         nextAction:
           const: calculate
-
     CalculateRequest:
       type: object
       additionalProperties: false
@@ -286,6 +242,7 @@ components:
         currentTransferYearMonth:
           type: string
           pattern: "^[0-9]{5}$"
+          description: API field for 公告土地現值年月. Do not present this to users as 本次移轉年月.
         previousDeclaredValuePerSqm:
           type: number
           minimum: 0
@@ -304,7 +261,6 @@ components:
           type: number
           minimum: 0
           default: 0
-
     TaxResult:
       type: object
       additionalProperties: false
@@ -314,7 +270,6 @@ components:
           type: number
         rateNote:
           type: string
-
     CalculateResult:
       type: object
       additionalProperties: true
@@ -352,7 +307,6 @@ components:
           $ref: "#/components/schemas/TaxResult"
         selfUseTaxResult:
           $ref: "#/components/schemas/TaxResult"
-
     GptsCalculateSuccess:
       type: object
       additionalProperties: false
@@ -364,7 +318,6 @@ components:
           $ref: "#/components/schemas/CalculateResult"
         nextAction:
           const: prepare-pdf
-
     PdfPrepareRequest:
       type: object
       additionalProperties: false
@@ -377,7 +330,7 @@ components:
         confirmedLandData:
           type: object
           additionalProperties: true
-          description: User-confirmed PDF land fields. Include landCityDistrict, landSection, landNumber, landArea, ownershipRange, previous/current year-month and values.
+          description: PDF land fields. Include land area, ownership, 公告土地現值年月, values, and urban planning fields.
           properties:
             landCityDistrict:
               type: string
@@ -393,12 +346,30 @@ components:
               example: "0318-0000"
             landArea:
               type: number
-              description: Land area in square meters.
-              example: 107.77
+              description: Land area in square meters. Preserve thousands separators when reading transcript text, for example 1,073.77.
+              example: 1073.77
             ownershipRange:
               type: string
               description: Ownership range, for example 1/1. Transcript value 全部 may be sent as 1/1.
               example: "1/1"
+            landUrbanPlanningLabel:
+              type: string
+              enum: [都市計畫內, 非都市計畫內]
+              description: Urban planning display label for the PDF.
+              example: 非都市計畫內
+            landUrbanPlanningType:
+              type: string
+              enum: [urban, nonUrban]
+              description: Optional normalized urban planning type.
+              example: nonUrban
+            useDistrict:
+              type: string
+              description: Transcript 使用分區. Blank with blank landUseCategory means 都市計畫內.
+              example: 特定農業區
+            landUseCategory:
+              type: string
+              description: Transcript 使用地類別. Any concrete value means 非都市計畫內.
+              example: 農牧用地
             previousTransferYearMonth:
               type: string
               pattern: "^[0-9]{5}$"
@@ -428,7 +399,6 @@ components:
               type: string
             storeName:
               type: string
-
     GptsPreparePdfSuccess:
       type: object
       additionalProperties: false
@@ -454,7 +424,6 @@ components:
                 - type: "null"
         nextAction:
           const: download
-
     GptsError:
       type: object
       additionalProperties: false
@@ -478,16 +447,12 @@ components:
             - UNKNOWN_ERROR
         reason:
           type: string
-          enum:
-            - missing_credentials
-            - store_user_not_found
-            - store_user_inactive
-            - store_user_expired
-            - invalid_auth_hash
-            - invalid_auth_code
-            - store_auth_error
         stage:
           type: string
           enum: [login, calculate, prepare-pdf, method]
         sourceStatus:
           type: number
+        missingFields:
+          type: array
+          items:
+            type: string

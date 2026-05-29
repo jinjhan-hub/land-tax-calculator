@@ -26,7 +26,7 @@ export const landTaxPacificV1Template = {
     landNumber: { page: 0, x: 124.0, y: 662.0, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
     landArea: { page: 0, x: 387.64, y: 662.0, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
     ownershipRange: { page: 0, x: 124.0, y: 636.67, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
-    generatedAt: { page: 0, x: 387.64, y: 636.67, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
+    landUrbanPlanningLabel: { page: 0, x: 387.64, y: 636.67, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
     previousTransferYearMonth: { page: 0, x: 124.0, y: 576.0, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
     currentTransferYearMonth: { page: 0, x: 387.64, y: 576.0, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },
     previousDeclaredValuePerSqm: { page: 0, x: 124.0, y: 552.0, maxWidth: 165.64, fontSize: 10, align: 'left', color: '#222222' },

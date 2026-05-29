@@ -90,6 +90,20 @@ function drawWrappedField(page: PDFPage, text: string, field: PdfFieldSpec, font
   });
 }
 
+function drawTemplateLabelOverrides(page: PDFPage, font: PDFFont) {
+  const white = rgb(1, 1, 1);
+  const labelColor = rgb(0.33, 0.38, 0.45);
+  const labels = [
+    { text: "都市計畫別", x: 304, y: 636.67, width: 70 },
+    { text: "公告現值年月", x: 304, y: 576, width: 78 },
+  ];
+
+  for (const label of labels) {
+    page.drawRectangle({ x: label.x - 2, y: label.y - 3, width: label.width, height: 14, color: white });
+    page.drawText(label.text, { x: label.x, y: label.y, size: 9, font, color: labelColor });
+  }
+}
+
 export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: StoreProfile | null): Promise<Uint8Array> {
   const confirmedLandData = payload.confirmedLandData ?? {};
   const calculationResult = payload.calculationResult ?? {};
@@ -108,6 +122,7 @@ export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: Sto
     fontName: cjkFont.name,
   });
   const pages = pdfDoc.getPages();
+  drawTemplateLabelOverrides(pages[0], cjkFont);
 
   const values: Record<string, unknown> = {
     ...confirmedLandData,

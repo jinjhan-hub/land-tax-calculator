@@ -24,6 +24,31 @@ describe("calculateLandTax", () => {
     expect(result.selfUseTaxResult.estimatedTax).toBe(2300);
   });
 
+  it("calculates the 107.77 square meter simplified sample", () => {
+    const result = calculateLandTax(
+      {
+        landArea: 107.77,
+        ownershipNumerator: 1,
+        ownershipDenominator: 1,
+        previousTransferYearMonth: "10210",
+        currentTransferYearMonth: "11501",
+        previousDeclaredValuePerSqm: 1619.6,
+        currentDeclaredValuePerSqm: 1900,
+        improvementCost: 0,
+        landReadjustmentCost: 0,
+        engineeringBenefitFee: 0,
+      },
+      { previousIndexValue: 94.66, currentIndexValue: 110.22 },
+    );
+
+    expect(result.taxIndexMultiplier).toBeCloseTo(0.9466);
+    expect(result.currentTotalValue).toBeCloseTo(204763);
+    expect(result.adjustedPreviousTotalValue).toBeCloseTo(165223.627, 2);
+    expect(result.taxableIncrement).toBeCloseTo(39539.373, 2);
+    expect(result.generalTaxResult.estimatedTax).toBe(7908);
+    expect(result.selfUseTaxResult.estimatedTax).toBe(3954);
+  });
+
   it("10210 tax price index multiplier should use previous index divided by 100", () => {
     const result = calculateLandTax(
       {
