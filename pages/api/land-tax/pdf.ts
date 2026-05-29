@@ -8,6 +8,66 @@ import { encryptPdfData } from "@/lib/tokens/pdf-encryption";
 import { createPdfDownloadToken, PDF_TOKEN_TTL_MINUTES } from "@/lib/tokens/pdf-token";
 
 const FORBIDDEN_INPUT_KEYS = ["image", "base64", "businessCardImageUrl", "openaiFileIdRefs", "portraitAvailable", "portraitCropArea"];
+const REQUIRED_PDF_LAND_FIELDS = ["landCityDistrict", "landSection", "landNumber", "landArea", "ownershipRange"] as const;
+
+function cleanText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function firstValue(source: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (cleanText(value)) return value;
+  }
+  return undefined;
+}
+
+function normalizeOwnershipRange(value: unknown): unknown {
+  const text = cleanText(value);
+  if (!text) return value;
+  return text === "全部" ? "1/1" : text;
+}
+
+function normalizePdfPayload(body: unknown): Record<string, unknown> {
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? { ...(body as Record<string, unknown>) } : {};
+  const rawLandData =
+    payload.confirmedLandData && typeof payload.confirmedLandData === "object" && !Array.isArray(payload.confirmedLandData)
+      ? (payload.confirmedLandData as Record<string, unknown>)
+      : {};
+  const confirmedLandData = { ...rawLandData };
+
+  confirmedLandData.landCityDistrict = firstValue(confirmedLandData, ["landCityDistrict", "cityDistrict", "countyDistrict", "landLocation"]);
+  confirmedLandData.landSection = firstValue(confirmedLandData, ["landSection", "section", "landSectionName"]);
+  confirmedLandData.landNumber = firstValue(confirmedLandData, ["landNumber", "landNo", "lotNumber", "cadastralNumber"]);
+  confirmedLandData.landArea = firstValue(confirmedLandData, ["landArea", "area", "landAreaSqm"]);
+  confirmedLandData.ownershipRange = normalizeOwnershipRange(firstValue(confirmedLandData, ["ownershipRange", "rightScope", "rightsRange"]));
+  confirmedLandData.currentTransferYearMonth = firstValue(confirmedLandData, [
+    "currentTransferYearMonth",
+    "announcedLandValueYearMonth",
+    "currentAnnouncedLandValueYearMonth",
+  ]);
+  confirmedLandData.previousTransferYearMonth = firstValue(confirmedLandData, ["previousTransferYearMonth", "previousTransferYm"]);
+  confirmedLandData.previousDeclaredValuePerSqm = firstValue(confirmedLandData, [
+    "previousDeclaredValuePerSqm",
+    "previousTransferValuePerSqm",
+    "previousDeclaredLandValuePerSqm",
+  ]);
+  confirmedLandData.currentDeclaredValuePerSqm = firstValue(confirmedLandData, [
+    "currentDeclaredValuePerSqm",
+    "announcedLandValuePerSqm",
+    "currentAnnouncedLandValuePerSqm",
+  ]);
+
+  return { ...payload, confirmedLandData };
+}
+
+function getMissingPdfLandFields(body: Record<string, unknown>): string[] {
+  const landData = body.confirmedLandData as Record<string, unknown> | undefined;
+  if (!landData) return [...REQUIRED_PDF_LAND_FIELDS];
+  return REQUIRED_PDF_LAND_FIELDS.filter((field) => !cleanText(landData[field]));
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -22,8 +82,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ success: false, errorCode: "PDF_GENERATION_FAILED" });
     }
 
+    const pdfPayload = normalizePdfPayload(req.body);
+    const missingFields = getMissingPdfLandFields(pdfPayload);
+    if (missingFields.length > 0) {
+      return res.status(400).json({ success: false, errorCode: "LAND_FIELD_MISSING", missingFields });
+    }
+
     const storeProfile = await fetchStoreProfileByCodes(session.storeCode, session.userCode);
-    const pdfBytes = await generateLandTaxPdf(req.body, storeProfile);
+    const pdfBytes = await generateLandTaxPdf(pdfPayload, storeProfile);
     const { token, tokenHash, expiresAt } = createPdfDownloadToken();
     const supabase = createSupabaseAdminClient();
     const { error } = await supabase.from("land_tax_temp_pdf_files").insert({

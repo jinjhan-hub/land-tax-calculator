@@ -376,7 +376,44 @@ components:
         confirmedLandData:
           type: object
           additionalProperties: true
-          description: User-confirmed land fields for display in the PDF.
+          description: User-confirmed PDF land fields. Include landCityDistrict, landSection, landNumber, landArea, ownershipRange, previous/current year-month and values.
+          properties:
+            landCityDistrict:
+              type: string
+              description: County/city plus district or township for PDF display.
+              example: CITY_DISTRICT_PLACEHOLDER
+            landSection:
+              type: string
+              description: Land section name for PDF display.
+              example: LAND_SECTION_PLACEHOLDER
+            landNumber:
+              type: string
+              description: Land number for PDF display.
+              example: "0318-0000"
+            landArea:
+              type: number
+              description: Land area in square meters.
+              example: 107.77
+            ownershipRange:
+              type: string
+              description: Ownership range, for example 1/1. Transcript value 全部 may be sent as 1/1.
+              example: "1/1"
+            previousTransferYearMonth:
+              type: string
+              pattern: "^[0-9]{5}$"
+              example: "10210"
+            currentTransferYearMonth:
+              type: string
+              pattern: "^[0-9]{5}$"
+              description: API field mapped from 公告土地現值年月.
+              example: "11501"
+            previousDeclaredValuePerSqm:
+              type: number
+              example: 1619.6
+            currentDeclaredValuePerSqm:
+              type: number
+              description: API field mapped from 公告土地現值.
+              example: 1900
         calculationResult:
           $ref: "#/components/schemas/CalculateResult"
         businessCardData:

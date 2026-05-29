@@ -37,7 +37,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const storeProfileSummary = await fetchStoreProfileByCodes(session.storeCode, session.userCode);
     const source = await proxyJsonPost(req, "/api/land-tax/pdf", true);
     if (source.status < 200 || source.status >= 300 || source.body.success !== true) {
-      return res.status(source.status).json(toGptsError(source, "prepare-pdf"));
+      const errorBody = toGptsError(source, "prepare-pdf");
+      return res.status(source.status).json({
+        ...errorBody,
+        missingFields: Array.isArray(source.body.missingFields) ? source.body.missingFields : undefined,
+      });
     }
 
     return res.status(200).json({

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { degrees, PDFDocument, rgb } from "pdf-lib";
+import { degrees, PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { StoreProfile } from "@/lib/auth/store-users";
 import { createStoreDisclosureLines, resolveWatermarkText } from "@/lib/pdf/store-profile-text";
 import { landTaxPacificV1Template, type PdfFieldSpec } from "@/templates/land-tax/pacific-v1.fields";
@@ -35,6 +35,59 @@ function debugPdf(...args: unknown[]) {
   if (process.env.PDF_DEBUG === "true") {
     console.info("[land-tax-pdf]", ...args);
   }
+}
+
+function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+
+  for (const char of Array.from(text)) {
+    const next = current + char;
+    if (!current || font.widthOfTextAtSize(next, fontSize) <= maxWidth) {
+      current = next;
+      continue;
+    }
+
+    lines.push(current.trimEnd());
+    current = char.trimStart();
+  }
+
+  if (current) lines.push(current.trimEnd());
+  return lines.length > 0 ? lines : [""];
+}
+
+function fitWrappedText(text: string, font: PDFFont, initialFontSize: number, maxWidth: number, maxLines: number) {
+  for (let size = initialFontSize; size >= 6.5; size -= 0.3) {
+    const lines = wrapText(text, font, size, maxWidth);
+    if (lines.length <= maxLines) return { fontSize: size, lines };
+  }
+
+  const lines = wrapText(text, font, 6.5, maxWidth);
+  const clippedLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && clippedLines.length > 0) {
+    let lastLine = clippedLines[clippedLines.length - 1];
+    while (lastLine && font.widthOfTextAtSize(`${lastLine}...`, 6.5) > maxWidth) {
+      lastLine = lastLine.slice(0, -1);
+    }
+    clippedLines[clippedLines.length - 1] = `${lastLine}...`;
+  }
+  return { fontSize: 6.5, lines: clippedLines };
+}
+
+function drawWrappedField(page: PDFPage, text: string, field: PdfFieldSpec, font: PDFFont) {
+  const maxLines = 2;
+  const fitted = fitWrappedText(text, font, field.fontSize, field.maxWidth, maxLines);
+  const lineHeight = fitted.fontSize * 1.25;
+  fitted.lines.forEach((line, index) => {
+    page.drawText(line, {
+      x: field.x,
+      y: field.y - index * lineHeight,
+      size: fitted.fontSize,
+      font,
+      color: hexToRgb(field.color),
+      maxWidth: field.maxWidth,
+    });
+  });
 }
 
 export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: StoreProfile | null): Promise<Uint8Array> {
@@ -79,6 +132,11 @@ export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: Sto
       debugPdf("field", { fieldName, text });
     }
     const page = pages[field.page];
+    if (field.note?.includes("wrap")) {
+      drawWrappedField(page, text, field, cjkFont);
+      continue;
+    }
+
     const textWidth = cjkFont.widthOfTextAtSize(text, field.fontSize);
     const x = field.align === "right" ? field.x + field.maxWidth - textWidth : field.align === "center" ? field.x + (field.maxWidth - textWidth) / 2 : field.x;
     page.drawText(text, { x: Math.max(field.x, x), y: field.y, size: field.fontSize, font: cjkFont, color: hexToRgb(field.color), maxWidth: field.maxWidth });
