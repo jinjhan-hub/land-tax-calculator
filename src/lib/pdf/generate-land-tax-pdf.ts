@@ -1,16 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { degrees, PDFDocument, rgb } from "pdf-lib";
 import type { StoreProfile } from "@/lib/auth/store-users";
 import { createStoreDisclosureLines, resolveWatermarkText } from "@/lib/pdf/store-profile-text";
 import { landTaxPacificV1Template, type PdfFieldSpec } from "@/templates/land-tax/pacific-v1.fields";
 
 const DEFAULT_PDF_FONT_PATH = "assets/fonts/NotoSansTC-Regular.ttf";
 const CJK_PATTERN = /[\u3400-\u9fff]/;
-const ASCII_PATTERN = /^[\x00-\x7F]+$/;
-
-const TEXT_FIELDS_USING_STANDARD_FONT = new Set(["formulaVersion"]);
 
 type PdfPayload = {
   confirmedLandData?: Record<string, unknown>;
@@ -40,10 +37,6 @@ function debugPdf(...args: unknown[]) {
   }
 }
 
-function shouldUseStandardFont(fieldName: string, text: string) {
-  return TEXT_FIELDS_USING_STANDARD_FONT.has(fieldName) && ASCII_PATTERN.test(text);
-}
-
 export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: StoreProfile | null): Promise<Uint8Array> {
   const confirmedLandData = payload.confirmedLandData ?? {};
   const calculationResult = payload.calculationResult ?? {};
@@ -55,7 +48,6 @@ export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: Sto
   const pdfDoc = await PDFDocument.load(templateBytes);
   pdfDoc.registerFontkit(fontkit);
   const cjkFont = await pdfDoc.embedFont(fontBytes, { subset: false });
-  const standardFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   debugPdf("font", {
     fontPath,
     fontBytesLength: fontBytes.length,
@@ -87,10 +79,9 @@ export async function generateLandTaxPdf(payload: PdfPayload, storeProfile?: Sto
       debugPdf("field", { fieldName, text });
     }
     const page = pages[field.page];
-    const font = shouldUseStandardFont(fieldName, text) ? standardFont : cjkFont;
-    const textWidth = font.widthOfTextAtSize(text, field.fontSize);
+    const textWidth = cjkFont.widthOfTextAtSize(text, field.fontSize);
     const x = field.align === "right" ? field.x + field.maxWidth - textWidth : field.align === "center" ? field.x + (field.maxWidth - textWidth) / 2 : field.x;
-    page.drawText(text, { x: Math.max(field.x, x), y: field.y, size: field.fontSize, font, color: hexToRgb(field.color), maxWidth: field.maxWidth });
+    page.drawText(text, { x: Math.max(field.x, x), y: field.y, size: field.fontSize, font: cjkFont, color: hexToRgb(field.color), maxWidth: field.maxWidth });
   }
 
   const watermarkText = resolveWatermarkText(storeProfile);
