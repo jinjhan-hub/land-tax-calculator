@@ -5,6 +5,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { landTaxPacificV1Template, type PdfFieldSpec } from "@/templates/land-tax/pacific-v1.fields";
 
 const DEFAULT_PDF_FONT_PATH = "assets/fonts/NotoSansTC-Regular.ttf";
+const CJK_PATTERN = /[\u3400-\u9fff]/;
 
 type PdfPayload = {
   confirmedLandData: Record<string, unknown>;
@@ -28,6 +29,12 @@ function resolvePdfFontPath() {
   return path.isAbsolute(configuredPath) ? configuredPath : path.join(process.cwd(), configuredPath);
 }
 
+function debugPdf(...args: unknown[]) {
+  if (process.env.PDF_DEBUG === "true") {
+    console.info("[land-tax-pdf]", ...args);
+  }
+}
+
 export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Array> {
   const fontPath = resolvePdfFontPath();
   const templatePath = path.join(process.cwd(), landTaxPacificV1Template.pdfPath.replace(/^\/public\//, "public/"));
@@ -36,6 +43,12 @@ export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Arra
   const pdfDoc = await PDFDocument.load(templateBytes);
   pdfDoc.registerFontkit(fontkit);
   const font = await pdfDoc.embedFont(fontBytes, { subset: false });
+  debugPdf("font", {
+    fontPath,
+    fontBytesLength: fontBytes.length,
+    fontConstructor: font.constructor.name,
+    fontName: font.name,
+  });
   const pages = pdfDoc.getPages();
 
   const values: Record<string, unknown> = {
@@ -57,6 +70,9 @@ export async function generateLandTaxPdf(payload: PdfPayload): Promise<Uint8Arra
   for (const [fieldName, field] of Object.entries(fields)) {
     const text = valueToText(values[fieldName]);
     if (!text) continue;
+    if (CJK_PATTERN.test(text)) {
+      debugPdf("field", { fieldName, text });
+    }
     const page = pages[field.page];
     const textWidth = font.widthOfTextAtSize(text, field.fontSize);
     const x = field.align === "right" ? field.x + field.maxWidth - textWidth : field.align === "center" ? field.x + (field.maxWidth - textWidth) / 2 : field.x;
