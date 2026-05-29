@@ -1,0 +1,19 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { validateStoreUser } from "@/lib/auth/store-auth";
+import { createSessionToken } from "@/lib/tokens/session";
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ success: false, errorCode: "UNKNOWN_ERROR" });
+  }
+
+  const { storeCode, userCode, authCode } = req.body ?? {};
+  const result = await validateStoreUser({ storeCode, userCode, authCode });
+  if (!result.valid) {
+    return res.status(401).json({ success: false, errorCode: "AUTH_FAILED" });
+  }
+
+  const session = createSessionToken(storeCode, userCode);
+  return res.status(200).json({ success: true, ...session });
+}
