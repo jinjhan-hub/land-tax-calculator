@@ -281,3 +281,131 @@ Request body：
 - `/api/land-tax/pdf` request body 是彈性物件，Action schema 需要自行定義清楚欄位。
 - `/api/land-tax/calculate` 失敗時有 `errorCode`，但欄位層級錯誤沒有逐欄 detail。
 - login 失敗 reason 與一般 `errorCode` 分離，schema 描述要同時包含兩者。
+# V1.4 GPTs Wrapper Endpoints
+
+V1.4 adds JSON-friendly wrapper endpoints for GPTs Actions. These wrappers are the preferred endpoints for GPTs schemas:
+
+- `POST /api/gpts/login`
+- `POST /api/gpts/calculate`
+- `POST /api/gpts/prepare-pdf`
+
+The wrappers do not replace the existing production APIs. They call the existing APIs internally and normalize the response shape for GPTs.
+
+## `POST /api/gpts/login`
+
+Wraps:
+
+```text
+POST /api/auth/login
+```
+
+Request:
+
+```json
+{
+  "storeCode": "CH006",
+  "authCode": "DO_NOT_USE_REAL_AUTH_CODE"
+}
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "sessionToken": "SESSION_TOKEN_PLACEHOLDER",
+    "store": {
+      "storeCode": "CH006",
+      "storeName": "STORE_NAME_PLACEHOLDER",
+      "brokerageName": "BROKERAGE_NAME_PLACEHOLDER",
+      "brokerName": "BROKER_NAME_PLACEHOLDER",
+      "brokerLicenseNo": "BROKER_LICENSE_PLACEHOLDER",
+      "watermarkText": "WATERMARK_TEXT_PLACEHOLDER",
+      "expiresAt": "2099-08-26"
+    }
+  },
+  "nextAction": "calculate"
+}
+```
+
+## `POST /api/gpts/calculate`
+
+Wraps:
+
+```text
+POST /api/land-tax/calculate
+```
+
+The wrapper requires:
+
+```text
+Authorization: Bearer <sessionToken>
+```
+
+The tax formula remains inside the existing calculation API. GPTs should not compute tax by itself.
+
+## `POST /api/gpts/prepare-pdf`
+
+Wraps:
+
+```text
+POST /api/land-tax/pdf
+```
+
+The wrapper requires:
+
+```text
+Authorization: Bearer <sessionToken>
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "downloadUrl": "PDF_DOWNLOAD_URL_PLACEHOLDER",
+    "expiresInMinutes": 15,
+    "storeProfileSummary": {
+      "storeCode": "CH006",
+      "storeName": "STORE_NAME_PLACEHOLDER",
+      "brokerageName": "BROKERAGE_NAME_PLACEHOLDER",
+      "brokerName": "BROKER_NAME_PLACEHOLDER",
+      "brokerLicenseNo": "BROKER_LICENSE_PLACEHOLDER",
+      "watermarkText": "WATERMARK_TEXT_PLACEHOLDER",
+      "expiresAt": "2099-08-26"
+    }
+  },
+  "nextAction": "download"
+}
+```
+
+The wrapper does not generate PDF download tokens by itself. It uses the existing PDF API result. It also does not return binary PDF content.
+
+## Wrapper Error Shape
+
+Wrapper errors use:
+
+```json
+{
+  "success": false,
+  "errorCode": "AUTH_FAILED",
+  "reason": "invalid_auth_code",
+  "stage": "login",
+  "sourceStatus": 401
+}
+```
+
+`reason` is primarily expected for login failures. For calculate and PDF errors, GPTs should rely on `errorCode` and `stage`.
+
+## Existing Endpoints Still Exist
+
+The original endpoints remain available for frontend, manual smoke tests, and compatibility:
+
+- `POST /api/auth/login`
+- `POST /api/land-tax/calculate`
+- `POST /api/land-tax/pdf`
+- `GET /api/land-tax/pdf/download`
+
+GPTs should prefer `/api/gpts/*` unless a specific binary PDF download action is required.

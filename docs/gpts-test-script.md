@@ -176,3 +176,85 @@ PDF 中應正確顯示：
 - 不在文件中保存 authCode。
 - 不在文件中保存完整 sessionToken。
 - 不在文件中保存完整 downloadUrl。
+# V1.4 Wrapper Endpoint Test Flow
+
+GPTs Actions should now prefer the JSON-friendly wrapper endpoints:
+
+- `POST /api/gpts/login`
+- `POST /api/gpts/calculate`
+- `POST /api/gpts/prepare-pdf`
+
+## Wrapper login
+
+Call `gptsLogin` with:
+
+```json
+{
+  "storeCode": "CH006",
+  "authCode": "DO_NOT_USE_REAL_AUTH_CODE"
+}
+```
+
+Expected:
+
+- `success=true`
+- `data.sessionToken` exists
+- `data.store` exists
+- `nextAction=calculate`
+
+Do not display the full `data.sessionToken`.
+
+## Wrapper calculate
+
+Call `gptsCalculate` with the same land input used by the existing calculate test and:
+
+```text
+Authorization: Bearer <sessionToken>
+```
+
+Expected:
+
+- `success=true`
+- `data.success=true`
+- `data.formulaVersion` exists
+- `data.generalTaxResult.estimatedTax` exists
+- `data.selfUseTaxResult.estimatedTax` exists
+- `nextAction=prepare-pdf`
+
+## Wrapper prepare PDF
+
+Call `gptsPreparePdf` with:
+
+- `confirmedLandData`
+- `calculationResult` from `data`
+- optional `businessCardData`
+
+Expected:
+
+- `success=true`
+- `data.downloadUrl` exists
+- `data.expiresInMinutes=15`
+- `data.storeProfileSummary` exists
+- `nextAction=download`
+
+The wrapper returns JSON only. It does not download binary PDF content.
+
+## Wrapper error handling
+
+For login failure, expect:
+
+```json
+{
+  "success": false,
+  "errorCode": "AUTH_FAILED",
+  "reason": "invalid_auth_code",
+  "stage": "login",
+  "sourceStatus": 401
+}
+```
+
+For expired sessions, expect `AUTH_FAILED` with the related stage.
+
+## PDF download handling
+
+After `gptsPreparePdf`, GPTs should present `data.downloadUrl` to the user as a short-lived link. If a GPTs Action cannot consume binary PDF responses, do not call the binary download endpoint from the schema.

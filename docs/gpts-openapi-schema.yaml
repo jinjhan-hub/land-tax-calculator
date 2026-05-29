@@ -1,32 +1,28 @@
 openapi: 3.1.0
 info:
-  title: Land Tax Calculator GPTs Actions
-  version: 0.1.0-draft
+  title: Land Tax Calculator GPTs Wrapper Actions
+  version: 0.2.0-draft
   description: |
-    Draft OpenAPI schema for the Land Value Increment Tax GPTs integration.
-    The GPTs should call the Vercel API as the source of truth for login,
-    calculation, and PDF preparation. Do not place real auth codes, session
-    tokens, secrets, or PDF download URLs in this schema.
+    Draft OpenAPI schema for GPTs Actions using the JSON-friendly /api/gpts/*
+    wrapper endpoints. The wrappers reuse the existing production APIs for
+    login, calculation, and PDF preparation. Do not put real auth codes,
+    session tokens, secrets, or full PDF download URLs in this file.
 servers:
   - url: https://land-tax-calculator-xi.vercel.app
     description: Production Vercel deployment
 tags:
-  - name: Auth
-    description: Store login and short-lived session token creation.
-  - name: LandTax
-    description: Land tax calculation and PDF preparation.
-  - name: PdfDownload
-    description: Short-lived PDF download endpoint. GPTs may not be able to consume the binary directly.
+  - name: GPTs
+    description: JSON-friendly wrapper endpoints for GPTs Actions.
 security: []
 paths:
-  /api/auth/login:
+  /api/gpts/login:
     post:
-      tags: [Auth]
-      operationId: loginStore
-      summary: Login a store account
+      tags: [GPTs]
+      operationId: gptsLogin
+      summary: Login a store for GPTs
       description: |
-        Login with storeCode and authCode. The backend always uses userCode=STORE.
-        The response includes a short-lived sessionToken and store profile.
+        Wrapper around POST /api/auth/login. Request uses storeCode and authCode.
+        The backend still fixes userCode to STORE through the existing auth flow.
       requestBody:
         required: true
         content:
@@ -35,7 +31,6 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
             examples:
               placeholder:
-                summary: Placeholder login payload
                 value:
                   storeCode: CH006
                   authCode: DO_NOT_USE_REAL_AUTH_CODE
@@ -45,34 +40,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginSuccessResponse"
-              examples:
-                placeholder:
-                  value:
-                    success: true
-                    sessionToken: SESSION_TOKEN_PLACEHOLDER
-                    store:
-                      storeCode: CH006
-                      storeName: STORE_NAME_PLACEHOLDER
-                      brokerageName: BROKERAGE_NAME_PLACEHOLDER
-                      brokerName: BROKER_NAME_PLACEHOLDER
-                      brokerLicenseNo: BROKER_LICENSE_PLACEHOLDER
-                      watermarkText: WATERMARK_TEXT_PLACEHOLDER
-                      expiresAt: "2099-08-26"
+                $ref: "#/components/schemas/GptsLoginSuccess"
         "401":
           description: Login failed.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthFailedResponse"
-  /api/land-tax/calculate:
+                $ref: "#/components/schemas/GptsError"
+  /api/gpts/calculate:
     post:
-      tags: [LandTax]
-      operationId: calculateLandTax
-      summary: Calculate land value increment tax
+      tags: [GPTs]
+      operationId: gptsCalculate
+      summary: Calculate land value increment tax for GPTs
       description: |
-        Calculate land tax using server-side CPI indexes and the deployed formula.
-        GPTs must not replace this calculation with its own formula.
+        Wrapper around POST /api/land-tax/calculate. It does not reimplement or
+        modify the tax formula.
       security:
         - bearerAuth: []
       requestBody:
@@ -81,54 +63,42 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CalculateRequest"
-            examples:
-              minimal:
-                value:
-                  landArea: 100
-                  ownershipNumerator: 1
-                  ownershipDenominator: 1
-                  previousTransferYearMonth: "11301"
-                  currentTransferYearMonth: "11401"
-                  previousDeclaredValuePerSqm: 1000
-                  currentDeclaredValuePerSqm: 1500
-                  improvementCost: 0
-                  landReadjustmentCost: 0
-                  engineeringBenefitFee: 0
       responses:
         "200":
           description: Calculation succeeded.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CalculateSuccessResponse"
+                $ref: "#/components/schemas/GptsCalculateSuccess"
         "400":
           description: Invalid land input or calculation failure.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/GptsError"
         "401":
           description: Missing or invalid session token.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/GptsError"
         "404":
-          description: CPI index was not found for one of the requested ROC year-month values.
+          description: CPI index was not found.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /api/land-tax/pdf:
+                $ref: "#/components/schemas/GptsError"
+  /api/gpts/prepare-pdf:
     post:
-      tags: [LandTax]
-      operationId: prepareLandTaxPdf
-      summary: Prepare a land tax PDF and return a short-lived download URL
+      tags: [GPTs]
+      operationId: gptsPreparePdf
+      summary: Prepare a PDF for GPTs and return JSON metadata
       description: |
-        Generates a PDF from confirmed land data and calculation results.
-        Store disclosure text and watermark are resolved server-side from the
-        sessionToken; GPTs must not provide or trust user-entered store profile
-        data for official disclosure.
+        Wrapper around POST /api/land-tax/pdf. It does not generate a PDF token
+        itself and does not modify PDF rendering logic. The response is JSON and
+        includes downloadUrl, expiresInMinutes, and storeProfileSummary.
+        The PDF download URL is short-lived. GPTs should present it to the user
+        instead of trying to parse binary PDF content.
       security:
         - bearerAuth: []
       requestBody:
@@ -137,108 +107,32 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PdfPrepareRequest"
-            examples:
-              placeholder:
-                value:
-                  confirmedLandData:
-                    landCityDistrict: "CITY_DISTRICT_PLACEHOLDER"
-                    landSection: "LAND_SECTION_PLACEHOLDER"
-                    landNumber: "123-1"
-                    landArea: 100
-                    ownershipRange: "1/1"
-                    previousTransferYearMonth: "11301"
-                    currentTransferYearMonth: "11401"
-                    previousDeclaredValuePerSqm: 1000
-                    currentDeclaredValuePerSqm: 1500
-                  calculationResult:
-                    success: true
-                    formulaVersion: land-tax-v1.0.0
-                    previousIndexValue: 100
-                    currentIndexValue: 110
-                    taxIndexMultiplier: 1.1
-                    currentTotalValue: 150000
-                    adjustedPreviousTotalValue: 110000
-                    taxableIncrement: 40000
-                    generalTaxResult:
-                      estimatedTax: 8000
-                      rateNote: GENERAL_RATE_NOTE_PLACEHOLDER
-                    selfUseTaxResult:
-                      estimatedTax: 4000
-                      rateNote: SELF_USE_RATE_NOTE_PLACEHOLDER
-                  businessCardData:
-                    agentName: AGENT_NAME_PLACEHOLDER
-                    phone: PHONE_PLACEHOLDER
-                    storeName: CONTACT_STORE_NAME_PLACEHOLDER
       responses:
         "200":
           description: PDF was prepared successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PdfPrepareSuccessResponse"
-              examples:
-                placeholder:
-                  value:
-                    success: true
-                    downloadUrl: PDF_DOWNLOAD_URL_PLACEHOLDER
-                    expiresInMinutes: 15
+                $ref: "#/components/schemas/GptsPreparePdfSuccess"
         "400":
           description: PDF generation failed or forbidden input keys were included.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/GptsError"
         "401":
           description: Missing or invalid session token.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /api/land-tax/pdf/download:
-    get:
-      tags: [PdfDownload]
-      operationId: downloadLandTaxPdf
-      summary: Download a prepared PDF
-      description: |
-        Returns application/pdf, not JSON. GPTs Actions may not handle this
-        binary response directly. If binary download is not supported, present
-        the short-lived downloadUrl from prepareLandTaxPdf to the user instead.
-        Do not log or expose the full downloadUrl outside the user-facing flow.
-      parameters:
-        - name: token
-          in: query
-          required: true
-          description: Short-lived PDF download token returned inside downloadUrl.
-          schema:
-            type: string
-            example: PDF_DOWNLOAD_TOKEN_PLACEHOLDER
-      responses:
-        "200":
-          description: PDF binary response.
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-        "401":
-          description: Missing or invalid PDF download token.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "410":
-          description: PDF download token expired.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/GptsError"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: sessionToken
-      description: Short-lived sessionToken returned by loginStore.
+      description: Short-lived sessionToken returned by gptsLogin.
   schemas:
     LoginRequest:
       type: object
@@ -247,24 +141,14 @@ components:
       properties:
         storeCode:
           type: string
-          description: Store code. The backend pairs this with userCode=STORE.
           example: CH006
         authCode:
           type: string
           format: password
-          description: Store auth code. Do not store or display this value.
           example: DO_NOT_USE_REAL_AUTH_CODE
     StoreProfile:
       type: object
       additionalProperties: false
-      required:
-        - storeCode
-        - storeName
-        - brokerageName
-        - brokerName
-        - brokerLicenseNo
-        - watermarkText
-        - expiresAt
       properties:
         storeCode:
           type: string
@@ -288,38 +172,25 @@ components:
           type: [string, "null"]
           format: date
           example: "2099-08-26"
-    LoginSuccessResponse:
+    GptsLoginSuccess:
       type: object
       additionalProperties: false
-      required: [success, sessionToken, store]
+      required: [success, data, nextAction]
       properties:
         success:
           const: true
-        sessionToken:
-          type: string
-          description: Short-lived session token. Do not reveal it to the user.
-          example: SESSION_TOKEN_PLACEHOLDER
-        store:
-          $ref: "#/components/schemas/StoreProfile"
-    AuthFailedResponse:
-      type: object
-      additionalProperties: false
-      required: [success, errorCode]
-      properties:
-        success:
-          const: false
-        errorCode:
-          const: AUTH_FAILED
-        reason:
-          type: string
-          enum:
-            - missing_credentials
-            - store_user_not_found
-            - store_user_inactive
-            - store_user_expired
-            - invalid_auth_hash
-            - invalid_auth_code
-            - store_auth_error
+        data:
+          type: object
+          additionalProperties: false
+          required: [sessionToken, store]
+          properties:
+            sessionToken:
+              type: string
+              example: SESSION_TOKEN_PLACEHOLDER
+            store:
+              $ref: "#/components/schemas/StoreProfile"
+        nextAction:
+          const: calculate
     CalculateRequest:
       type: object
       additionalProperties: false
@@ -344,11 +215,9 @@ components:
         previousTransferYearMonth:
           type: string
           pattern: "^[0-9]{5}$"
-          description: ROC year-month in YYYMM format.
         currentTransferYearMonth:
           type: string
           pattern: "^[0-9]{5}$"
-          description: ROC year-month in YYYMM format.
         previousDeclaredValuePerSqm:
           type: number
           minimum: 0
@@ -376,7 +245,7 @@ components:
           type: number
         rateNote:
           type: string
-    CalculateSuccessResponse:
+    CalculateResult:
       type: object
       additionalProperties: true
       required:
@@ -412,6 +281,17 @@ components:
           $ref: "#/components/schemas/TaxResult"
         selfUseTaxResult:
           $ref: "#/components/schemas/TaxResult"
+    GptsCalculateSuccess:
+      type: object
+      additionalProperties: false
+      required: [success, data, nextAction]
+      properties:
+        success:
+          const: true
+        data:
+          $ref: "#/components/schemas/CalculateResult"
+        nextAction:
+          const: prepare-pdf
     PdfPrepareRequest:
       type: object
       additionalProperties: false
@@ -421,27 +301,8 @@ components:
           type: object
           additionalProperties: true
           description: User-confirmed land fields for display in the PDF.
-          properties:
-            landCityDistrict:
-              type: string
-            landSection:
-              type: string
-            landNumber:
-              type: string
-            landArea:
-              type: number
-            ownershipRange:
-              type: string
-            previousTransferYearMonth:
-              type: string
-            currentTransferYearMonth:
-              type: string
-            previousDeclaredValuePerSqm:
-              type: number
-            currentDeclaredValuePerSqm:
-              type: number
         calculationResult:
-          $ref: "#/components/schemas/CalculateSuccessResponse"
+          $ref: "#/components/schemas/CalculateResult"
         businessCardData:
           type: object
           additionalProperties: false
@@ -453,25 +314,35 @@ components:
               type: string
             storeName:
               type: string
-    PdfPrepareSuccessResponse:
+    GptsPreparePdfSuccess:
       type: object
       additionalProperties: false
-      required: [success, downloadUrl, expiresInMinutes]
+      required: [success, data, nextAction]
       properties:
         success:
           const: true
-        downloadUrl:
-          type: string
-          format: uri
-          description: Short-lived PDF download URL. Do not log the full URL.
-          example: PDF_DOWNLOAD_URL_PLACEHOLDER
-        expiresInMinutes:
-          type: number
-          example: 15
-    ErrorResponse:
+        data:
+          type: object
+          additionalProperties: false
+          required: [downloadUrl, expiresInMinutes, storeProfileSummary]
+          properties:
+            downloadUrl:
+              type: string
+              format: uri
+              example: PDF_DOWNLOAD_URL_PLACEHOLDER
+            expiresInMinutes:
+              type: number
+              example: 15
+            storeProfileSummary:
+              anyOf:
+                - $ref: "#/components/schemas/StoreProfile"
+                - type: "null"
+        nextAction:
+          const: download
+    GptsError:
       type: object
-      additionalProperties: true
-      required: [success, errorCode]
+      additionalProperties: false
+      required: [success, errorCode, stage]
       properties:
         success:
           const: false
@@ -489,3 +360,18 @@ components:
             - PDF_TOKEN_INVALID
             - VERCEL_API_TIMEOUT
             - UNKNOWN_ERROR
+        reason:
+          type: string
+          enum:
+            - missing_credentials
+            - store_user_not_found
+            - store_user_inactive
+            - store_user_expired
+            - invalid_auth_hash
+            - invalid_auth_code
+            - store_auth_error
+        stage:
+          type: string
+          enum: [login, calculate, prepare-pdf, method]
+        sourceStatus:
+          type: number
